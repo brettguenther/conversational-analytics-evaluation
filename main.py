@@ -1,36 +1,31 @@
-"""Main CLI for running evaluations."""
-
 import json
+import uuid
 import click
 import pandas as pd
 from io import StringIO
 
 from agents.looker_agent_client import LookerAgentClient
 from evals.metrics.sql_metrics import (
-    score_sql_response,
+    score_sql_text,
     SQLExactMatch,
-    SQLResultMatch,
+)
+from evals.metrics.dataframe_metrics import (
+    score_dataframes,
+    DataFrameMatch,
 )
 from evals.metrics.semantic_correctness_metric import semantic_correctness
 from utils.dataset_generator import EvalQuestion
 
-def parse_expected_result_to_df(result_str: str) -> pd.DataFrame | None:
-    """Parses the expected result string into a DataFrame.
-
-    This is a simple placeholder. A more robust implementation is needed to handle
-    the various formats in the expected_result column.
-    """
-    try:
-        # Attempt to treat the string as a CSV with flexible whitespace
-        return pd.read_csv(StringIO(result_str), sep='\s\s+', engine='python')
-    except Exception:
-        # Return None if parsing fails
-        return None
+def parse_expected_result_to_df(question: EvalQuestion) -> pd.DataFrame | None:
+    """Parses the expected result into a DataFrame."""
+    if question.expected_result:
+        return pd.DataFrame(question.expected_result)
+    return None
 
 
 @click.group()
 def cli():
-    """A CLI tool for evaluating Looker's Conversational Analytics API."""
+    """A CLI tool for evaluating Google's Gemini Data Analytics API."""
     pass
 
 
@@ -45,11 +40,11 @@ def cli():
 @click.option("--looker-model", required=True, help="Looker model name.")
 @click.option("--looker-explore", required=True, help="Looker explore name.")
 @click.option(
-    "--agent-id", default="sales-agent", help="The ID for the data agent."
+    "--agent-id", default=None, help="The ID for the data agent."
 )
 @click.option(
     "--conversation-id",
-    default="sales-eval-conversation",
+    default=None,
     help="The ID for the conversation.",
 )
 @click.option(
@@ -57,15 +52,28 @@ def cli():
     default="config.json",
     help="Path to the JSON file with configuration.",
 )
+@click.option(
+    "--system-instructions-file",
+    default=None,
+    help="Path to a file containing system instructions.",
+)
+@click.option(
+    "--skip-agent-use",
+    is_flag=True,
+    default=False,
+    help="Skip agent use and run evaluation using inline context API.",
+)
 def run_evaluation(
     questions_file: str,
     project_id: str,
     looker_instance: str,
     looker_model: str,
     looker_explore: str,
-    agent_id: str,
-    conversation_id: str,
+    agent_id: str | None,
+    conversation_id: str | None,
     config_file: str,
+    system_instructions_file: str | None,
+    skip_agent_use: bool,
 ):
     """Runs the evaluation of the Looker agent."""
 
@@ -85,13 +93,24 @@ def run_evaluation(
         looker_client_secret=looker_client_secret,
     )
 
-    # 2. Create or get the data agent
-    system_instruction = "You are a helpful data assistant."
-    print(f"Creating data agent '{agent_id}'...")
-    agent = looker_client.create_agent(agent_id, system_instruction)
-    if not agent:
-        print("Failed to create agent. Exiting.")
-        return
+    if system_instructions_file:
+        with open(system_instructions_file, "r") as f:
+            system_instruction = f.read()
+    else:
+        system_instruction = "You are a helpful data assistant."
+
+    if not skip_agent_use:
+        if agent_id is None:
+            agent_id = f"agent-{uuid.uuid4()}"
+        print(f"Creating data agent '{agent_id}'...")
+        agent = looker_client.create_agent(agent_id, system_instruction)
+        if not agent:
+            print("Failed to create agent. Exiting.")
+            return
+
+        if conversation_id is None:
+            conversation_id = f"conv-{uuid.uuid4()}"
+        looker_client.create_conversation(agent_id, conversation_id)
 
     # 3. Load the evaluation questions
     with open(questions_file, "r") as f:
@@ -99,7 +118,8 @@ def run_evaluation(
         questions = [EvalQuestion(**q) for q in questions_data]
 
     # 4. Initialize metrics
-    metrics = [SQLExactMatch(), SQLResultMatch()]
+    sql_text_metrics = [SQLExactMatch()]
+    dataframe_metrics = [DataFrameMatch()]
 
     # 5. Run evaluation for each question
     for i, question in enumerate(questions):
@@ -107,13 +127,13 @@ def run_evaluation(
         print(f"Category: {question.category}")
         print(f"Question: {question.question}")
 
-        # Create a new conversation for each question
-        conv_id = f"{conversation_id}-{i}"
-        looker_client.create_conversation(agent_id, conv_id)
-
         # Get the agent's response
-        generated_sql, generated_df, generated_looker_query = looker_client.chat(
-            agent_id, conv_id, question.question
+        generated_sql, generated_df, generated_looker_query, generated_text = looker_client.chat(
+            agent_id=agent_id, 
+            conversation_id=conversation_id, 
+            question=question.question,
+            system_instruction=system_instruction,
+            skip_agent_use=skip_agent_use,
         )
 
         print("\nAgent's Generated SQL:")
@@ -125,20 +145,28 @@ def run_evaluation(
         print("\nAgent's Generated Looker Query:")
         print(generated_looker_query)
 
+        print("\nAgent's Generated Text:")
+        print(generated_text)
+
         # Parse expected result string into a DataFrame
-        expected_df = parse_expected_result_to_df(question.expected_result)
+        expected_df = parse_expected_result_to_df(question)
 
         # For this version, we assume expected_sql is not in the questions file.
         expected_sql = ""
 
         # Score the response
-        scores = score_sql_response(
+        sql_scores = score_sql_text(
             generated_sql=generated_sql,
             expected_sql=expected_sql,
+            metrics=sql_text_metrics,
+        )
+        dataframe_scores = score_dataframes(
             generated_df=generated_df,
             expected_df=expected_df,
-            metrics=metrics,
+            metrics=dataframe_metrics,
         )
+        
+        scores = {**sql_scores, **dataframe_scores}
 
         if generated_looker_query and question.reference_query:
             semantic_score = semantic_correctness(generated_looker_query, question.reference_query)

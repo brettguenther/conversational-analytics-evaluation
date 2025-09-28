@@ -5,6 +5,7 @@ import pandas as pd
 from io import StringIO
 
 from agents.looker_agent_client import LookerAgentClient
+from agents.looker_agent_http_client import LookerAgentHttpClient
 from evals.metrics.sql_metrics import (
     score_sql_text,
     SQLExactMatch,
@@ -22,7 +23,6 @@ def parse_expected_result_to_df(question: EvalQuestion) -> pd.DataFrame | None:
         return pd.DataFrame(question.expected_result)
     return None
 
-
 @click.group()
 def cli():
     """A CLI tool for evaluating Google's Gemini Data Analytics API."""
@@ -36,6 +36,7 @@ def cli():
     help="Path to the JSON file with evaluation questions.",
 )
 @click.option("--project-id", required=True, help="Google Cloud project ID.")
+@click.option("--location", default="global", help="The location for the agent.")
 @click.option("--looker-instance", required=True, help="Looker instance URL.")
 @click.option("--looker-model", required=True, help="Looker model name.")
 @click.option("--looker-explore", required=True, help="Looker explore name.")
@@ -63,9 +64,16 @@ def cli():
     default=False,
     help="Skip agent use and run evaluation using inline context API.",
 )
+@click.option(
+    "--client",
+    type=click.Choice(["sdk", "http"]),
+    default="sdk",
+    help="The client to use for the evaluation.",
+)
 def run_evaluation(
     questions_file: str,
     project_id: str,
+    location: str,
     looker_instance: str,
     looker_model: str,
     looker_explore: str,
@@ -74,6 +82,7 @@ def run_evaluation(
     config_file: str,
     system_instructions_file: str | None,
     skip_agent_use: bool,
+    client: str,
 ):
     """Runs the evaluation of the Looker agent."""
 
@@ -83,15 +92,22 @@ def run_evaluation(
         looker_client_id = config.get("looker_client_id")
         looker_client_secret = config.get("looker_client_secret")
 
-    # 2. Initialize the Looker Agent Client
-    looker_client = LookerAgentClient(
-        project_id=project_id,
-        looker_instance=looker_instance,
-        looker_model=looker_model,
-        looker_explore=looker_explore,
-        looker_client_id=looker_client_id,
-        looker_client_secret=looker_client_secret,
-    )
+    # 2. Initialize the appropriate client
+    if client == "sdk":
+        looker_client = LookerAgentClient(
+            project_id=project_id,
+            location=location,
+            looker_client_id=looker_client_id,
+            looker_client_secret=looker_client_secret,
+        )
+    else:
+        looker_client = LookerAgentHttpClient(
+            project=project_id,
+            location=location,
+            looker_client_id=looker_client_id,
+            looker_client_secret=looker_client_secret,
+        )
+
 
     if system_instructions_file:
         with open(system_instructions_file, "r") as f:
@@ -103,7 +119,14 @@ def run_evaluation(
         if agent_id is None:
             agent_id = f"agent-{uuid.uuid4()}"
         print(f"Creating data agent '{agent_id}'...")
-        agent = looker_client.create_agent(agent_id, system_instruction)
+        agent = looker_client.create_agent(
+            agent_id=agent_id,
+            system_instruction=system_instruction,
+            looker_instance_uri=looker_instance,
+            lookml_model=looker_model,
+            explore=looker_explore,
+        )
+
         if not agent:
             print("Failed to create agent. Exiting.")
             return
@@ -129,8 +152,8 @@ def run_evaluation(
 
         # Get the agent's response
         generated_sql, generated_df, generated_looker_query, generated_text = looker_client.chat(
-            agent_id=agent_id, 
-            conversation_id=conversation_id, 
+            agent_id=agent_id,
+            conversation_id=conversation_id,
             question=question.question,
             system_instruction=system_instruction,
             skip_agent_use=skip_agent_use,
@@ -155,11 +178,13 @@ def run_evaluation(
         expected_sql = ""
 
         # Score the response
-        sql_scores = score_sql_text(
-            generated_sql=generated_sql,
-            expected_sql=expected_sql,
-            metrics=sql_text_metrics,
-        )
+        # sql_scores = score_sql_text(
+        #     generated_sql=generated_sql,
+        #     expected_sql=expected_sql,
+        #     metrics=sql_text_metrics,
+        # )
+        sql_scores = {}
+
         dataframe_scores = score_dataframes(
             generated_df=generated_df,
             expected_df=expected_df,

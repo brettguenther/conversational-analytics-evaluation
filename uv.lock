@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.13"
 
 [[package]]
@@ -8,6 +8,7 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "click" },
+    { name = "datacompy" },
     { name = "google-cloud" },
     { name = "google-cloud-geminidataanalytics" },
     { name = "pandas" },
@@ -16,8 +17,9 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "click", specifier = ">=8.2.1" },
+    { name = "datacompy", specifier = ">=0.7.3" },
     { name = "google-cloud", specifier = ">=0.34.0" },
-    { name = "google-cloud-geminidataanalytics", specifier = ">=0.3.0" },
+    { name = "google-cloud-geminidataanalytics", specifier = "==0.4.0" },
     { name = "pandas", specifier = ">=2.3.2" },
 ]
 
@@ -92,6 +94,20 @@ wheels = [
 ]
 
 [[package]]
+name = "datacompy"
+version = "0.7.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+    { name = "ordered-set" },
+    { name = "pandas" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/b5/50/43d74979ed8654c2ffca848186cedfba56a2bd1c71987e5954f88cf10f31/datacompy-0.7.3.tar.gz", hash = "sha256:95282d5b02e0e782fd92c76ee30aba228a7a0714984a02aa856483fb2088ed23", size = 28764, upload-time = "2021-10-25T14:48:09.531Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/9d/05/9736996fe336a80bdbebd588165e5cc46a1d39deb479f4dc730ad047c08a/datacompy-0.7.3-py3-none-any.whl", hash = "sha256:381d46b1e981fff6221486ab2b4c96c02d6f71a019c822532bb5f94fdd79b2be", size = 27615, upload-time = "2021-10-25T14:48:06.729Z" },
+]
+
+[[package]]
 name = "google-api-core"
 version = "2.25.1"
 source = { registry = "https://pypi.org/simple" }
@@ -138,7 +154,7 @@ wheels = [
 
 [[package]]
 name = "google-cloud-geminidataanalytics"
-version = "0.3.0"
+version = "0.4.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "google-api-core", extra = ["grpc"] },
@@ -147,9 +163,9 @@ dependencies = [
     { name = "proto-plus" },
     { name = "protobuf" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/37/1c/b2f6226cfadc08a0a91f343ac57f3ea3c5c523e2710005301e67fd9e2f6e/google_cloud_geminidataanalytics-0.3.0.tar.gz", hash = "sha256:b8ca16b8f7cf749a3666dd79113514fa852f06339112a61e4a29aba1a2e5be7a", size = 339425, upload-time = "2025-09-02T15:40:08.241Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/b5/3b/da18a021b30c656443ec2063c391e58ef7a22148bcf35e98395b2d73ce44/google_cloud_geminidataanalytics-0.4.0.tar.gz", hash = "sha256:74a164ad452a6cc27edce8c0bde1bcfcadc99c79d06ef6ec4527bc58fb1f11b6", size = 291925, upload-time = "2025-09-25T14:03:20.885Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/95/1f/579e21cb7fe14868ce1a4936b152500316ffe4e9edaf85aac3984fa59256/google_cloud_geminidataanalytics-0.3.0-py3-none-any.whl", hash = "sha256:126d3ab5430cb94140e574ca56f5e61f8c7ea7c8adb4436ca56f20d54632e2e6", size = 310519, upload-time = "2025-09-02T15:39:27.857Z" },
+    { url = "https://files.pythonhosted.org/packages/3c/7e/ab97df9e8c8af0219440cae997153277aa189a851a9a5923670743d3bf10/google_cloud_geminidataanalytics-0.4.0-py3-none-any.whl", hash = "sha256:cb402cca057fbae8e248ebfcb000b203a3f8e96712900775b0c58c909ff7fe35", size = 266190, upload-time = "2025-09-25T14:03:13.518Z" },
 ]
 
 [[package]]
@@ -274,6 +290,15 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/fd/c2/e5ed830e08cd0196351db55db82f65bc0ab05da6ef2b72a836dcf1936d2f/numpy-2.3.3-cp314-cp314t-win32.whl", hash = "sha256:1250c5d3d2562ec4174bce2e3a1523041595f9b651065e4a4473f5f48a6bc8a5", size = 6515371, upload-time = "2025-09-09T15:58:36.04Z" },
     { url = "https://files.pythonhosted.org/packages/47/c7/b0f6b5b67f6788a0725f744496badbb604d226bf233ba716683ebb47b570/numpy-2.3.3-cp314-cp314t-win_amd64.whl", hash = "sha256:b37a0b2e5935409daebe82c1e42274d30d9dd355852529eab91dab8dcca7419f", size = 13112576, upload-time = "2025-09-09T15:58:37.927Z" },
     { url = "https://files.pythonhosted.org/packages/06/b9/33bba5ff6fb679aa0b1f8a07e853f002a6b04b9394db3069a1270a7784ca/numpy-2.3.3-cp314-cp314t-win_arm64.whl", hash = "sha256:78c9f6560dc7e6b3990e32df7ea1a50bbd0e2a111e05209963f5ddcab7073b0b", size = 10545953, upload-time = "2025-09-09T15:58:40.576Z" },
+]
+
+[[package]]
+name = "ordered-set"
+version = "4.1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/4c/ca/bfac8bc689799bcca4157e0e0ced07e70ce125193fc2e166d2e685b7e2fe/ordered-set-4.1.0.tar.gz", hash = "sha256:694a8e44c87657c59292ede72891eb91d34131f6531463aab3009191c77364a8", size = 12826, upload-time = "2022-01-26T14:38:56.6Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/33/55/af02708f230eb77084a299d7b08175cff006dea4f2721074b92cdb0296c0/ordered_set-4.1.0-py3-none-any.whl", hash = "sha256:046e1132c71fcf3330438a539928932caf51ddbc582496833e23de611de14562", size = 7634, upload-time = "2022-01-26T14:38:48.677Z" },
 ]
 
 [[package]]

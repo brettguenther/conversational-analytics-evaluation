@@ -1,6 +1,8 @@
 """Looker Agent Client."""
 import pandas as pd
 from google.cloud import geminidataanalytics
+# from google.cloud import geminidataanalytics_v1beta as geminidataanalytics
+# from google.cloud import geminidataanalytics_v1alpha as geminidataanalytics
 from google.auth import default
 from google.auth.transport.requests import Request as gRequest
 from google.api_core import exceptions
@@ -12,34 +14,45 @@ class LookerAgentClient:
     def __init__(
         self,
         project_id: str,
-        looker_instance: str,
-        looker_model: str,
-        looker_explore: str,
+        location: str = "global",
         looker_access_token: str = None,
         looker_client_id: str = None,
         looker_client_secret: str = None,
     ):
         """Initializes the LookerAgentClient."""
         self.project_id = project_id
-        self.looker_instance = looker_instance
-        self.looker_model = looker_model
-        self.looker_explore = looker_explore
         self.data_agent_client = geminidataanalytics.DataAgentServiceClient()
         self.data_chat_client = geminidataanalytics.DataChatServiceClient()
 
+        self.location = location
+
         self.credentials = None
         if looker_client_id and looker_client_secret:
-            self.credentials = geminidataanalytics.Credentials()
-            self.credentials.oauth.secret.client_id = looker_client_id
-            self.credentials.oauth.secret.client_secret = looker_client_secret
+            self.credentials = geminidataanalytics.Credentials(
+                oauth=geminidataanalytics.OAuthCredentials(
+                    secret=geminidataanalytics.OAuthCredentials.SecretBased(
+                        client_id=looker_client_id, client_secret=looker_client_secret
+                    )
+                )
+            )
         elif looker_access_token:
-            self.credentials = geminidataanalytics.Credentials()
-            self.credentials.oauth.token.access_token = looker_access_token
+            self.credentials = geminidataanalytics.Credentials(
+                oauth=geminidataanalytics.OAuthCredentials(
+                    token=geminidataanalytics.OAuthCredentials.TokenBased(
+                        access_token=looker_access_token
+                    )
+                )
+            )
         else:
             token = self._get_auth_token()
             if token:
-                self.credentials = geminidataanalytics.Credentials()
-                self.credentials.oauth.token.access_token = token
+                self.credentials = geminidataanalytics.Credentials(
+                    oauth=geminidataanalytics.OAuthCredentials(
+                        token=geminidataanalytics.OAuthCredentials.TokenBased(
+                            access_token=token
+                        )
+                    )
+                )
 
     def _get_auth_token(self):
         """Gets the auth token using Application Default Credentials."""
@@ -50,12 +63,19 @@ class LookerAgentClient:
             return credentials.token
         return None
 
-    def _build_context(self, system_instruction: str, enable_python_analysis: bool = True) -> geminidataanalytics.Context:
+    def _build_context(
+        self,
+        system_instruction: str,
+        looker_instance_uri: str,
+        lookml_model: str,
+        explore: str,
+        enable_python_analysis: bool = False,
+    ) -> geminidataanalytics.Context:
         """Builds the context for the agent."""
         looker_explore_reference = geminidataanalytics.LookerExploreReference()
-        looker_explore_reference.looker_instance_uri = self.looker_instance
-        looker_explore_reference.lookml_model = self.looker_model
-        looker_explore_reference.explore = self.looker_explore
+        looker_explore_reference.looker_instance_uri = looker_instance_uri
+        looker_explore_reference.lookml_model = lookml_model
+        looker_explore_reference.explore = explore
 
         datasource_references = geminidataanalytics.DatasourceReferences()
         datasource_references.looker.explore_references = [
@@ -65,7 +85,16 @@ class LookerAgentClient:
         context = geminidataanalytics.Context()
         context.system_instruction = system_instruction
         context.datasource_references = datasource_references
+        conversation_options = geminidataanalytics.ConversationOptions()
         if enable_python_analysis:
+            conversation_options.analysis = geminidataanalytics.AnalysisOptions()
+            conversation_options.analysis.python = (
+                geminidataanalytics.PythonAnalysisOptions()
+            )
+            conversation_options.analysis.python.enabled = True
+        context.options = conversation_options
+
+        if enable_python_analysis:  
             context.options.analysis.python.enabled = True
         
         return context
@@ -74,18 +103,27 @@ class LookerAgentClient:
         self,
         agent_id: str,
         system_instruction: str,
-        enable_python_analysis: bool = True,
+        looker_instance_uri: str,
+        lookml_model: str,
+        explore: str,
+        enable_python_analysis: bool = False,
     ):
         """Creates a new data agent."""
-        published_context = self._build_context(system_instruction, enable_python_analysis)
+        published_context = self._build_context(
+            system_instruction,
+            looker_instance_uri,
+            lookml_model,
+            explore,
+            enable_python_analysis,
+        )
 
         data_agent = geminidataanalytics.DataAgent()
         data_agent.data_analytics_agent.published_context = published_context
-        agent_name = f"projects/{self.project_id}/locations/global/dataAgents/{agent_id}"
+        agent_name = f"projects/{self.project_id}/locations/{self.location}/dataAgents/{agent_id}"
         data_agent.name = agent_name
 
         request = geminidataanalytics.CreateDataAgentRequest(
-            parent=f"projects/{self.project_id}/locations/global",
+            parent=f"projects/{self.project_id}/locations/{self.location}",
             data_agent_id=agent_id,
             data_agent=data_agent,
         )
@@ -96,6 +134,7 @@ class LookerAgentClient:
         try:
             agent = self.data_agent_client.create_data_agent(request=request)
             print("Data Agent created")
+            print(agent)
             return agent
         except exceptions.AlreadyExists:
             print("Data Agent already exists, retrieving it.")
@@ -108,19 +147,21 @@ class LookerAgentClient:
         """Creates a new conversation."""
         conversation = geminidataanalytics.Conversation()
         conversation.agents = [
-            f"projects/{self.project_id}/locations/global/dataAgents/{agent_id}"
+            f"projects/{self.project_id}/locations/{self.location}/dataAgents/{agent_id}"
         ]
-        conversation_name = f"projects/{self.project_id}/locations/global/conversations/{conversation_id}"
+        conversation_name = f"projects/{self.project_id}/locations/{self.location}/conversations/{conversation_id}"
         conversation.name = conversation_name
 
         request = geminidataanalytics.CreateConversationRequest(
-            parent=f"projects/{self.project_id}/locations/global",
+            parent=f"projects/{self.project_id}/locations/{self.location}",
             conversation_id=conversation_id,
             conversation=conversation,
         )
+        # print(request)
 
         try:
             response = self.data_chat_client.create_conversation(request=request)
+            print(f"create conversation response: {response}")
             return response
         except exceptions.AlreadyExists:
             print("Conversation already exists, retrieving it.")
@@ -135,36 +176,34 @@ class LookerAgentClient:
         conversation_id: str = None,
     ) -> tuple[str | None, pd.DataFrame | None, dict | None, str | None]:
         """Sends a message to a conversation and returns the generated SQL and DataFrame."""
-        messages = [geminidataanalytics.Message()]
-        messages[0].user_message.text = question
-
+        # messages = [geminidataanalytics.Message()]
+        # messages[0].user_message.text = question
+        messages = [
+            geminidataanalytics.Message(
+                user_message=geminidataanalytics.UserMessage(text=question)
+            )
+        ]
         if skip_agent_use:
-            inline_context = self._build_context(system_instruction)
-            if self.credentials:
-                inline_context.datasource_references.credentials = self.credentials
-            
-            request = geminidataanalytics.ChatRequest(
-                parent=f"projects/{self.project_id}/locations/global",
-                messages=messages,
-                inline_context=inline_context,
-            )
+            # This will need to be updated to pass the looker details to the chat call if we want to support skip_agent_use
+            raise NotImplementedError("skip_agent_use is not yet supported with this client version")
         else:
-            conversation_reference = geminidataanalytics.ConversationReference()
-            conversation_reference.conversation = f"projects/{self.project_id}/locations/global/conversations/{conversation_id}"
-            conversation_reference.data_agent_context.data_agent = (
-                f"projects/{self.project_id}/locations/global/dataAgents/{agent_id}"
+            print("using a conversation to chat")
+            conversation_reference = geminidataanalytics.ConversationReference(
+                conversation=f"projects/{self.project_id}/locations/{self.location}/conversations/{conversation_id}",
+                data_agent_context=geminidataanalytics.DataAgentContext(
+                    data_agent=f"projects/{self.project_id}/locations/{self.location}/dataAgents/{agent_id}",
+                    credentials=self.credentials,
+                ),
             )
 
-            if self.credentials:
-                conversation_reference.data_agent_context.credentials = self.credentials
-
             request = geminidataanalytics.ChatRequest(
-                parent=f"projects/{self.project_id}/locations/global",
+                parent=f"projects/{self.project_id}/locations/{self.location}",
                 messages=messages,
                 conversation_reference=conversation_reference,
             )
 
-        stream = self.data_chat_client.chat(request=request, timeout=300)
+        print(f"Request: {request}")
+        stream = self.data_chat_client.chat(request=request)
 
         generated_sql = None
         generated_df = None
@@ -187,11 +226,11 @@ class LookerAgentClient:
                 if "generated_looker_query" in data_message:
                     if generated_looker_query is None:
                         generated_looker_query = {}
-                    generated_looker_query.update(data_message.generated_looker_query)
+                    generated_looker_query = data_message.generated_looker_query
                 elif "query" in data_message and hasattr(data_message.query, "looker"):
                     if generated_looker_query is None:
                         generated_looker_query = {}
-                    generated_looker_query.update(data_message.query.looker)
+                    generated_looker_query = data_message.query.looker
                 if "result" in data_message:
                     if not fields:
                         fields = [

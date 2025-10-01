@@ -1,12 +1,17 @@
 [project]
 name = "ca-api-eval"
 version = "0.1.0"
-description = "Add your description here"
+description = "Conversational Analytics API Eval"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "click>=8.2.1",
+    "datacompy>=0.7.3",
     "google-cloud>=0.34.0",
-    "google-cloud-geminidataanalytics>=0.3.0",
+    "google-cloud-geminidataanalytics==0.4.0",
     "pandas>=2.3.2",
+    "python-dotenv>=1.1.1",
 ]
+
+[tool.setuptools]
+packages = ["agents", "evals", "context", "utils"]

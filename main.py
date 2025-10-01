@@ -201,9 +201,9 @@ def run_evaluation(
 
         if generated_looker_query and question.reference_query:
             semantic_score = semantic_correctness(generated_looker_query, question.reference_query)
-            scores["SemanticCorrectness"] = semantic_score
+            scores["Semantic Correctness"] = semantic_score
 
-        is_correct = scores.get("SemanticCorrectness", 0.0) == 1.0 or scores.get("DataFrameMatch", 0.0) == 1.0 or scores.get("RougeFMetric") == 1.0
+        is_correct = scores.get("Semantic Correctness", 0.0) == 1.0 or scores.get("DataFrameMatch", 0.0) == 1.0 or scores.get("RougeFMetric") == 1.0
         if is_correct:
             correct_questions += 1
 

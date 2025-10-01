@@ -7,6 +7,7 @@ from google.auth.transport.requests import Request as gRequest
 from google.api_core import exceptions
 from dotenv import load_dotenv
 import logging
+import copy
 
 logger = logging.getLogger(__name__)
 
@@ -205,7 +206,11 @@ class LookerAgentClient:
                 conversation_reference=conversation_reference,
             )
 
-        logger.debug(f"Chat request: {request}")
+        log_request = copy.deepcopy(request)
+        if log_request.conversation_reference.data_agent_context.credentials.oauth.secret:
+            log_request.conversation_reference.data_agent_context.credentials.oauth.secret.client_id = "[MASKED]"
+            log_request.conversation_reference.data_agent_context.credentials.oauth.secret.client_secret = "[MASKED]"
+        logger.debug(f"Chat request: {log_request}")
         stream = self.data_chat_client.chat(request=request)
 
         generated_sql = None

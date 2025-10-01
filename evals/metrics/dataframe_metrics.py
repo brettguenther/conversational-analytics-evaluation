@@ -26,55 +26,56 @@ class DataFrameMetric(ABC):
 
 
 class DataFrameMatch(DataFrameMetric):
-    """Measures the similarity between two dataframes using datacompy."""
+    """Measures the similarity between two dataframes, allowing for partial matches."""
 
     def measure(
         self, generated_df: pd.DataFrame, expected_df: pd.DataFrame, **kwargs
     ) -> float:
-        """Compares two DataFrames for equality."""
+        """Compares two DataFrames, scoring based on column and data similarity."""
         if generated_df is None or expected_df is None:
             return 0.0
         
         if generated_df.empty and expected_df.empty:
             return 1.0
 
-        try:
-            # First, try a strict equality check with pandas testing
-            pd.testing.assert_frame_equal(
-                generated_df, expected_df, check_dtype=False
-            )
-            return 1.0
-        except AssertionError:
-            # If the strict check fails, fall back to datacompy for a more detailed comparison.
-            if set(generated_df.columns) != set(expected_df.columns):
-                return 0.0
+        # 1. Column Similarity Score (Weight: 0.3)
+        gen_cols = set(generated_df.columns)
+        exp_cols = set(expected_df.columns)
+        intersection = len(gen_cols.intersection(exp_cols))
+        union = len(gen_cols.union(exp_cols))
+        column_score = (intersection / union) if union > 0 else 0.0
 
-            # Rationale for parameters:
-            # - join_columns: Using all columns as join keys to ensure that rows are compared based on all their values.
-            # - abs_tol: A small tolerance for numeric comparisons to account for floating point inaccuracies.
-            # - ignore_spaces: True to ignore whitespace differences in string comparisons.
-            # - ignore_case: True to ignore case differences in string comparisons.
+        common_cols = list(gen_cols.intersection(exp_cols))
+        if not common_cols:
+            return 0.0 # No common columns, so no basis for data comparison
+
+        # 2. Data Similarity Score on Common Columns (Weight: 0.7)
+        gen_subset_df = generated_df[common_cols]
+        exp_subset_df = expected_df[common_cols]
+
+        try:
+            pd.testing.assert_frame_equal(
+                gen_subset_df, exp_subset_df, check_dtype=False
+            )
+            data_score = 1.0
+        except AssertionError:
             compare = datacompy.Compare(
-                generated_df,
-                expected_df,
-                join_columns=list(generated_df.columns),
+                gen_subset_df,
+                exp_subset_df,
+                join_columns=common_cols,
                 abs_tol=0.001,
                 ignore_spaces=True,
                 ignore_case=True,
                 df1_name="Generated",
                 df2_name="Expected",
             )
+            num_matching_rows = compare.intersect_rows.shape[0]
+            total_rows = max(len(gen_subset_df), len(exp_subset_df))
+            data_score = num_matching_rows / total_rows if total_rows > 0 else 0.0
 
-            # Get the columns that are for matching
-            match_cols = [col for col in compare.intersect_rows.columns if col.endswith('_match')]
-            
-            # Count the number of rows where all compared columns match
-            num_matching_rows = compare.intersect_rows[match_cols].all(axis=1).sum()
-
-            if num_matching_rows == len(expected_df) and len(compare.df1_unq_rows) == 0 and len(compare.df2_unq_rows) == 0:
-                return 1.0
-            else:
-                return num_matching_rows / len(expected_df)
+        # 3. Combine Scores
+        final_score = (0.3 * column_score) + (0.7 * data_score)
+        return final_score
 
 def score_dataframes(
     generated_df: pd.DataFrame,

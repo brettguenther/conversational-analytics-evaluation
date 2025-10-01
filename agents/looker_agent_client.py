@@ -1,11 +1,16 @@
 """Looker Agent Client."""
+import os
 import pandas as pd
 from google.cloud import geminidataanalytics
-# from google.cloud import geminidataanalytics_v1beta as geminidataanalytics
-# from google.cloud import geminidataanalytics_v1alpha as geminidataanalytics
 from google.auth import default
 from google.auth.transport.requests import Request as gRequest
 from google.api_core import exceptions
+from dotenv import load_dotenv
+import logging
+
+logger = logging.getLogger(__name__)
+
+load_dotenv()
 
 
 class LookerAgentClient:
@@ -16,8 +21,8 @@ class LookerAgentClient:
         project_id: str,
         location: str = "global",
         looker_access_token: str = None,
-        looker_client_id: str = None,
-        looker_client_secret: str = None,
+        looker_client_id: str = os.getenv("LOOKER_CLIENT_ID"),
+        looker_client_secret: str = os.getenv("LOOKER_CLIENT_SECRET"),
     ):
         """Initializes the LookerAgentClient."""
         self.project_id = project_id
@@ -133,14 +138,12 @@ class LookerAgentClient:
         # TODO: fix logic to CRUD + CLI simplicity
         try:
             agent = self.data_agent_client.create_data_agent(request=request)
-            print("Data Agent created")
-            print(agent)
             return agent
         except exceptions.AlreadyExists:
-            print("Data Agent already exists, retrieving it.")
+            logger.debug("Data Agent already exists, retrieving it.")
             return self.data_agent_client.get_data_agent(name=agent_name)
         except Exception as e:
-            print(f"Error creating Data Agent: {e}")
+            logger.error(f"Error creating Data Agent: {e}")
             return None
 
     def create_conversation(self, agent_id: str, conversation_id: str):
@@ -157,14 +160,14 @@ class LookerAgentClient:
             conversation_id=conversation_id,
             conversation=conversation,
         )
-        # print(request)
+        logger.debug(f"create conversation request: {request}")
 
         try:
             response = self.data_chat_client.create_conversation(request=request)
-            print(f"create conversation response: {response}")
+            logger.debug(f"create conversation response: {response}")
             return response
         except exceptions.AlreadyExists:
-            print("Conversation already exists, retrieving it.")
+            logger.debug("Conversation already exists, retrieving it.")
             return self.data_chat_client.get_conversation(name=conversation_name)
 
     def chat(
@@ -187,7 +190,7 @@ class LookerAgentClient:
             # This will need to be updated to pass the looker details to the chat call if we want to support skip_agent_use
             raise NotImplementedError("skip_agent_use is not yet supported with this client version")
         else:
-            print("using a conversation to chat")
+            # print("using a conversation to chat")
             conversation_reference = geminidataanalytics.ConversationReference(
                 conversation=f"projects/{self.project_id}/locations/{self.location}/conversations/{conversation_id}",
                 data_agent_context=geminidataanalytics.DataAgentContext(
@@ -202,7 +205,7 @@ class LookerAgentClient:
                 conversation_reference=conversation_reference,
             )
 
-        print(f"Request: {request}")
+        logger.debug(f"Chat request: {request}")
         stream = self.data_chat_client.chat(request=request)
 
         generated_sql = None
@@ -213,7 +216,7 @@ class LookerAgentClient:
         fields = []
 
         for response in stream:
-            print(response)
+            logger.debug(response)
             if response.system_message:
                 data_message = response.system_message.data
                 text_message = response.system_message.text

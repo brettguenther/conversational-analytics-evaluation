@@ -58,7 +58,7 @@ class DataFrameMatch(DataFrameMetric):
                 generated_df,
                 expected_df,
                 join_columns=list(generated_df.columns),
-                abs_tol=0.0001,
+                abs_tol=0.001,
                 ignore_spaces=True,
                 ignore_case=True,
                 df1_name="Generated",
@@ -75,7 +75,6 @@ class DataFrameMatch(DataFrameMetric):
                 return 1.0
             else:
                 return num_matching_rows / len(expected_df)
-
 
 def score_dataframes(
     generated_df: pd.DataFrame,

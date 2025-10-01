@@ -4,6 +4,7 @@ import json
 import json as json_lib
 import os
 import time
+import logging
 
 import google.auth
 import google.auth.transport.requests
@@ -11,7 +12,11 @@ import pandas as pd
 import requests
 from google.auth import default
 from google.auth.transport.requests import Request as gRequest
+from dotenv import load_dotenv
 
+load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 def is_json(s):
     try:
@@ -28,8 +33,8 @@ class LookerAgentHttpClient:
         self,
         project: str,
         location: str,
-        looker_client_id: str = None,
-        looker_client_secret: str = None,
+        looker_client_id: str = os.getenv("LOOKER_CLIENT_ID"),
+        looker_client_secret: str = os.getenv("LOOKER_CLIENT_SECRET"),
     ):
         """Initializes the LookerAgentHttpClient.
 
@@ -124,11 +129,11 @@ class LookerAgentHttpClient:
         )
 
         if data_agent_response.status_code == 200:
-            print("Data Agent created successfully!")
-            print(json.dumps(data_agent_response.json(), indent=2))
+            logger.info("Data Agent created successfully!")
+            logger.debug(json.dumps(data_agent_response.json(), indent=2))
         else:
-            print(f"Error creating Data Agent: {data_agent_response.status_code}")
-            print(data_agent_response.text)
+            logger.error(f"Error creating Data Agent: {data_agent_response.status_code}")
+            logger.debug(data_agent_response.text)
         return data_agent_response
 
     def create_conversation(self, agent_id: str, conversation_id: str):
@@ -150,13 +155,11 @@ class LookerAgentHttpClient:
             json=conversation_payload,
         )
         if conversation_response.status_code == 200:
-            print("Conversation created successfully!")
-            print(json.dumps(conversation_response.json(), indent=2))
+            logger.info("Conversation created successfully!")
+            logger.debug(json.dumps(conversation_response.json(), indent=2))
         else:
-            print(
-                f"Error creating Conversation: {conversation_response.status_code}"
-            )
-            print(conversation_response.text)
+            logger.error(f"Error creating Conversation: {conversation_response.status_code}")
+            logger.error(conversation_response.text)
         return conversation_response
 
     def chat(
@@ -227,7 +230,7 @@ class LookerAgentHttpClient:
         fields = []
 
         for response_json in full_response:
-            print(response_json)
+            logger.debug(response_json)
             if "systemMessage" in response_json:
                 system_message = response_json["systemMessage"]
                 if "data" in system_message:

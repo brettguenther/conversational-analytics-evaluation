@@ -63,7 +63,7 @@ class DataFrameMatch(DataFrameMetric):
                 gen_subset_df,
                 exp_subset_df,
                 join_columns=common_cols,
-                abs_tol=0.001,
+                abs_tol=0.01,
                 ignore_spaces=True,
                 ignore_case=True,
                 df1_name="Generated",

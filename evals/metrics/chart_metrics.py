@@ -37,7 +37,7 @@ class ChartMetric:
 
         # 2. Compare x-axis field
         generated_x_field = generated_chart.get("encoding", {}).get("x", {}).get("field")
-        expected_x_field = expected_chart.get("x-axis")
+        expected_x_field = expected_chart.get("x-axis").replace(".","_")
         if generated_x_field and expected_x_field and generated_x_field == expected_x_field:
             score += 1
             logger.debug("X-axis field matches.")
@@ -46,7 +46,7 @@ class ChartMetric:
 
         # 3. Compare y-axis field
         generated_y_field = generated_chart.get("encoding", {}).get("y", {}).get("field")
-        expected_y_field = expected_chart.get("y-axis")
+        expected_y_field = expected_chart.get("y-axis").replace(".","_")
         if generated_y_field and expected_y_field and generated_y_field == expected_y_field:
             score += 1
             logger.debug("Y-axis field matches.")

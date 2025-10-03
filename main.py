@@ -55,6 +55,12 @@ def cli():
     default="INFO",
     help="Set the logging level.",
 )
+@click.option(
+    "--llm-eval",
+    is_flag=True,
+    default=False,
+    help="Enable LLM-based evaluation through Vertex AI Evaluation Service.",
+)
 def run_evaluation(
     questions_file: str,
     project_id: str,
@@ -68,6 +74,7 @@ def run_evaluation(
     skip_agent_use: bool,
     generate_report: bool,
     log_level: str,
+    llm_eval: bool,
 ):
     """Runs the evaluation of the Looker agent."""
 
@@ -100,6 +107,7 @@ def run_evaluation(
     from utils.dataset_generator import EvalQuestion
     from evals.metrics.text_similarity_metric import calculate_rouge_score
     from evals.metrics.chart_metrics import ChartMetric
+    from evals.metrics.llm_based_metrics import LLMBasedMetrics
 
     def parse_expected_result_to_df(question: EvalQuestion) -> pd.DataFrame | None:
         """Parses the expected result into a DataFrame."""
@@ -148,6 +156,9 @@ def run_evaluation(
     sql_text_metrics = [SQLExactMatch()]
     dataframe_metrics = [DataFrameMatch()]
     chart_metric = ChartMetric()
+    if llm_eval:
+        #to do: provide alt region if global default used
+        llm_metric = LLMBasedMetrics(project_id=project_id, location="us-central1")
     
     results = []
     correct_questions = 0
@@ -188,6 +199,10 @@ def run_evaluation(
         scores = {**sql_scores, **dataframe_scores, **text_score}
         scores["ChartCorrectness"] = chart_score
 
+        if llm_eval:
+            llm_scores = llm_metric.evaluate(question.question, generated_text, generated_df)
+            scores["LLMBasedEvaluation"] = llm_scores
+
         if generated_looker_query and question.reference_query:
             semantic_score = semantic_correctness(generated_looker_query, question.reference_query)
             scores["Semantic Correctness"] = semantic_score
@@ -223,6 +238,7 @@ def run_evaluation(
                     "correct": scores.get("ChartCorrectness", 0.0) == 1.0,
                     "details": f"Score: {scores.get('ChartCorrectness', 0.0):.2f}",
                 },
+                "llm_based_evaluation": scores.get("LLMBasedEvaluation", {}),
                 "overall_correctness": is_correct,
             },
         }
@@ -252,7 +268,6 @@ def run_evaluation(
         logging.info("Evaluation report generated as evaluation_report.md")
     else:
         print(json.dumps(evaluation_results, indent=2))
-
 
 if __name__ == "__main__":
     cli()

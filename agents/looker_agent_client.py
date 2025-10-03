@@ -5,9 +5,11 @@ from google.cloud import geminidataanalytics
 from google.auth import default
 from google.auth.transport.requests import Request as gRequest
 from google.api_core import exceptions
+from google.protobuf.json_format import MessageToDict
 from dotenv import load_dotenv
 import logging
 import copy
+import proto
 
 logger = logging.getLogger(__name__)
 
@@ -170,6 +172,24 @@ class LookerAgentClient:
         except exceptions.AlreadyExists:
             logger.debug("Conversation already exists, retrieving it.")
             return self.data_chat_client.get_conversation(name=conversation_name)
+        
+    def _value_to_dict(self, v):
+        if isinstance(v, proto.marshal.collections.maps.MapComposite):
+            return self._map_to_dict(v)
+        if isinstance(v, proto.marshal.collections.RepeatedComposite):
+            return [self._value_to_dict(el) for el in v]
+        if isinstance(v, (int, float, str, bool)):
+            return v
+        return MessageToDict(v)
+
+    def _map_to_dict(self, d):
+        out = {}
+        for k in d:
+            if isinstance(d[k], proto.marshal.collections.maps.MapComposite):
+                out[k] = self._map_to_dict(d[k])
+            else:
+                out[k] = self._value_to_dict(d[k])
+        return out
 
     def chat(
         self,
@@ -178,7 +198,7 @@ class LookerAgentClient:
         skip_agent_use: bool = False,
         agent_id: str = None,
         conversation_id: str = None,
-    ) -> tuple[str | None, pd.DataFrame | None, dict | None, str | None]:
+    ) -> tuple[str | None, pd.DataFrame | None, dict | None, str | None, dict | None]:
         """Sends a message to a conversation and returns the generated SQL and DataFrame."""
         # messages = [geminidataanalytics.Message()]
         # messages[0].user_message.text = question
@@ -217,12 +237,14 @@ class LookerAgentClient:
         generated_df = None
         generated_looker_query = None
         generated_text = None
+        generated_chart = None
         data_rows = []
         fields = []
 
         for response in stream:
             logger.debug(response)
             if response.system_message:
+                system_message = response.system_message
                 data_message = response.system_message.data
                 text_message = response.system_message.text
                 # print(f"Received data message: {data_message}")
@@ -251,8 +273,17 @@ class LookerAgentClient:
                     if generated_text is None:
                         generated_text = ""
                     generated_text += str(text_message.parts)
-        
+                if "chart" in system_message:
+                    logger.debug("chart found in response")
+                    if "query" in system_message.chart:
+                        print(system_message.chart.query.instructions)
+                    elif "result" in system_message.chart:
+                        vega_config = system_message.chart.result.vega_config
+                        generated_chart = self._map_to_dict(vega_config)
+                        logger.debug(generated_chart)
+
+
         if data_rows:
             generated_df = pd.DataFrame(data_rows)
 
-        return generated_sql, generated_df, generated_looker_query, generated_text
+        return generated_sql, generated_df, generated_looker_query, generated_text, generated_chart

@@ -20,7 +20,7 @@ class DataFrameMetric(ABC):
             expected_df: The DataFrame resulting from the expected SQL.
 
         Returns:
-            A score between 0.0 and 1.0, where 1.0 is a perfect match.
+            A score between 0.0 and 1.0, where 1.0 is a exact match.
         """
         pass
 
@@ -36,29 +36,29 @@ class DataFrameMatch(DataFrameMetric):
             return 0.0
         
         if generated_df.empty and expected_df.empty:
-            return 1.0
-
-        # 1. Column Similarity Score (Weight: 0.3)
-        gen_cols = set(generated_df.columns)
-        exp_cols = set(expected_df.columns)
-        intersection = len(gen_cols.intersection(exp_cols))
-        union = len(gen_cols.union(exp_cols))
-        column_score = (intersection / union) if union > 0 else 0.0
-
-        common_cols = list(gen_cols.intersection(exp_cols))
-        if not common_cols:
-            return 0.0 # No common columns, so no basis for data comparison
-
-        # 2. Data Similarity Score on Common Columns (Weight: 0.7)
-        gen_subset_df = generated_df[common_cols]
-        exp_subset_df = expected_df[common_cols]
+            return None
 
         try:
             pd.testing.assert_frame_equal(
-                gen_subset_df, exp_subset_df, check_dtype=False
+                generated_df, expected_df, check_dtype=False
             )
+            column_score = 1.0
             data_score = 1.0
         except AssertionError:
+            # 1. Column Similarity Score (Weight: 0.3)
+            gen_cols = set(generated_df.columns)
+            exp_cols = set(expected_df.columns)
+            intersection = len(gen_cols.intersection(exp_cols))
+            union = len(gen_cols.union(exp_cols))
+            column_score = (intersection / union) if union > 0 else 0.0
+
+            common_cols = list(gen_cols.intersection(exp_cols))
+            if not common_cols:
+                return 0.0 # No common columns, so no basis for data comparison
+
+            # 2. Data Similarity Score on Common Columns (Weight: 0.7)
+            gen_subset_df = generated_df[common_cols]
+            exp_subset_df = expected_df[common_cols]
             compare = datacompy.Compare(
                 gen_subset_df,
                 exp_subset_df,

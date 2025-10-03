@@ -13,28 +13,31 @@ def semantic_correctness(generated_query, reference_query):
 
     scores = {}
 
-    # 1. Compare Model (Weight: 0.1)
-    scores['model'] = 0.1 if generated_query.model == reference_query.get('model') else 0.0
-    logger.debug(f"Model Score: {scores['model']}")
+    ## TO DO: when CA support for multi model
+    # 1. Compare Model
+    # scores['model'] = 0.1 if generated_query.model == reference_query.get('model') else 0.0
+    # logger.debug(f"Model Score: {scores['model']}")
 
-    # 2. Compare Explore (Weight: 0.1)
-    scores['explore'] = 0.1 if generated_query.explore == reference_query.get('explore') else 0.0
-    logger.debug(f"Explore Score: {scores['explore']}")
+    ## TO DO: when CA support for multi explore
+    # 2. Compare Explore
+    # scores['explore'] = 0.1 if generated_query.explore == reference_query.get('explore') else 0.0
+    # logger.debug(f"Explore Score: {scores['explore']}")
 
-    # 3. Compare Fields (Weight: 0.4)
+    # 3. Compare Fields (Weight: 0.6)
     generated_fields = set(generated_query.fields)
     reference_fields = set(reference_query.get('fields', []))
     logger.debug(f"Generated Fields: {generated_fields}")
     logger.debug(f"Reference Fields: {reference_fields}")
-    if reference_fields:
-        intersection = len(generated_fields.intersection(reference_fields))
-        union = len(generated_fields.union(reference_fields))
-        scores['fields'] = 0.4 * (intersection / union) if union > 0 else 0.0
-    else:
-        scores['fields'] = 0.4 # No reference fields to compare against
+    if not reference_fields:
+        return None
+
+    intersection = len(generated_fields.intersection(reference_fields))
+    union = len(generated_fields.union(reference_fields))
+    scores['fields'] = 0.6 * (intersection / union) if union > 0 else 0.0
     logger.debug(f"Fields Score: {scores['fields']}")
 
     # 4. Compare Filters (Weight: 0.4)
+    # TODO: improve logic as wildcards could result in different result sets
     def normalize_filters(filters):
         if isinstance(filters, list):
             return {f.field: str(f.value).strip().lower().replace('%', '') for f in filters}

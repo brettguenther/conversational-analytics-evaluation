@@ -44,12 +44,6 @@ def cli():
     help="Skip agent use and run evaluation using inline context API.",
 )
 @click.option(
-    "--client",
-    type=click.Choice(["sdk", "http"]),
-    default="sdk",
-    help="The client to use for the evaluation.",
-)
-@click.option(
     "--generate-report",
     is_flag=True,
     default=False,
@@ -72,7 +66,6 @@ def run_evaluation(
     conversation_id: str | None,
     system_instructions_file: str | None,
     skip_agent_use: bool,
-    client: str,
     generate_report: bool,
     log_level: str,
 ):
@@ -95,7 +88,6 @@ def run_evaluation(
     from dataclasses import asdict
 
     from agents.looker_agent_client import LookerAgentClient
-    from agents.looker_agent_http_client import LookerAgentHttpClient
     from evals.metrics.sql_metrics import (
         score_sql_text,
         SQLExactMatch,
@@ -107,6 +99,7 @@ def run_evaluation(
     from evals.metrics.semantic_correctness_metric import semantic_correctness
     from utils.dataset_generator import EvalQuestion
     from evals.metrics.text_similarity_metric import calculate_rouge_score
+    from evals.metrics.chart_metrics import ChartMetric
 
     def parse_expected_result_to_df(question: EvalQuestion) -> pd.DataFrame | None:
         """Parses the expected result into a DataFrame."""
@@ -115,18 +108,10 @@ def run_evaluation(
         return None
 
     # 2. Initialize the appropriate client
-    if client == "sdk":
-        looker_client = LookerAgentClient(
-            project_id=project_id,
-            location=location,
-        )
-    else:
-        looker_client = LookerAgentHttpClient(
-            project=project_id,
-            location=location,
-        )
-
-
+    looker_client = LookerAgentClient(
+        project_id=project_id,
+        location=location,
+    )
     if system_instructions_file:
         with open(system_instructions_file, "r") as f:
             system_instruction = f.read()
@@ -151,6 +136,7 @@ def run_evaluation(
 
         if conversation_id is None:
             conversation_id = f"conv-{uuid.uuid4()}"
+        logging.info(f"Creating conversation '{conversation_id}'...")
         looker_client.create_conversation(agent_id, conversation_id)
 
     # 3. Load the evaluation questions
@@ -161,17 +147,18 @@ def run_evaluation(
     # 4. Initialize metrics
     sql_text_metrics = [SQLExactMatch()]
     dataframe_metrics = [DataFrameMatch()]
+    chart_metric = ChartMetric()
     
     results = []
     correct_questions = 0
 
     # 5. Run evaluation for each question
     for i, question in enumerate(questions):
-        logging.info(f"--- Running evaluation for question {i+1}/{len(questions)} ---")
+        logging.info(f"--- Running evaluation for question {question.id} ({i+1}/{len(questions)}) ---")
         logging.info(f"Question: {question.question}, Category: {question.category}")
 
         # Get the agent's response
-        generated_sql, generated_df, generated_looker_query, generated_text = looker_client.chat(
+        generated_sql, generated_df, generated_looker_query, generated_text, generated_chart = looker_client.chat(
             agent_id=agent_id,
             conversation_id=conversation_id,
             question=question.question,
@@ -195,9 +182,11 @@ def run_evaluation(
         )
 
         text_score = {"RougeFMetric":calculate_rouge_score(generated_text, question.expected_result_text)}
-    
         
+        chart_score = chart_metric.evaluate(generated_chart, question.expected_data_visualization)
+
         scores = {**sql_scores, **dataframe_scores, **text_score}
+        scores["ChartCorrectness"] = chart_score
 
         if generated_looker_query and question.reference_query:
             semantic_score = semantic_correctness(generated_looker_query, question.reference_query)
@@ -215,6 +204,7 @@ def run_evaluation(
                 "response_text": generated_text,
                 "generated_query": serialized_looker_query,
                 "data_result": generated_df.to_dict(orient="records") if generated_df is not None else [],
+                "generated_chart": generated_chart,
             },
             "evaluation_metrics": {
                 "semantic_correctness": {
@@ -229,6 +219,10 @@ def run_evaluation(
                     "correct": scores.get("RougeFMetric", 0.0) >= 0.8,
                     "details": f"Score: {scores.get('RougeFMetric', 0.0):.2f}",
                 },
+                "chart_correctness": {
+                    "correct": scores.get("ChartCorrectness", 0.0) == 1.0,
+                    "details": f"Score: {scores.get('ChartCorrectness', 0.0):.2f}",
+                },
                 "overall_correctness": is_correct,
             },
         }
@@ -238,6 +232,8 @@ def run_evaluation(
     total_questions = len(questions)
     accuracy = correct_questions / total_questions if total_questions > 0 else 0.0
     evaluation_summary = {
+        "agent_id": agent_id,
+        "conversation_id": conversation_id,
         "total_questions": total_questions,
         "correct_questions": correct_questions,
         "incorrect_questions": total_questions - correct_questions,

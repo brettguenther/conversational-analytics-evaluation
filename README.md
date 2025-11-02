@@ -64,7 +64,7 @@ Evaluation questions are defined in JSON files in the `data/questions/` director
 {
   "id": "S-4",
   "category": "Simple",
-  "question": "What were monthly sales in 2024?",
+  "question": "What were sales in December 2024?",
   "expected_result_text": "",
   "expected_result": [
       {
@@ -82,7 +82,7 @@ Evaluation questions are defined in JSON files in the `data/questions/` director
     "model": "ecomm",
     "explore": "sales",
     "fields": ["sales.calendar_month", "sales.total_sales"],
-    "filters": { "sales.calendar_month": "2024" },
+    "filters": { "sales.calendar_month": "2024-12" },
     "limit": "5000"
   }
 }

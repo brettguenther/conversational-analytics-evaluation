@@ -15,9 +15,10 @@ class EvalQuestion:
     category: str
     question: str
     expected_result_text: str
+    id: str | None = None
     expected_result: List[Dict] = field(default_factory=list)
     reference_query: dict | None = None
-
+    expected_data_visualization: dict | None = None
 
 def create_questions_json_from_csv(
     csv_path: Union[str, Path], json_path: Union[str, Path]

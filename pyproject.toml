@@ -1,12 +1,15 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "ca-api-eval"
 version = "0.1.0"
 description = "Conversational Analytics API Eval"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.12"
 dependencies = [
     "altair>=5.5.0",
-    "click>=8.2.1",
     "datacompy>=0.7.3",
     "google-cloud>=0.34.0",
     "google-cloud-aiplatform[evaluation]>=1.118.0",
@@ -14,9 +17,15 @@ dependencies = [
     "pandas>=2.3.2",
     "python-dotenv>=1.1.1",
     "ruff>=0.13.3",
+    "typer>=0.19.2",
+    "rich",
     "vertexai>=1.43.0",
     "vl-convert-python>=1.8.0",
+    "rouge-score>=0.1.2",
 ]
 
+[project.scripts]
+"ca-eval" = "cli.cli:app"
+
 [tool.setuptools]
-packages = ["agents", "evals", "context", "utils"]
+packages = ["agents","evals","tests","utils","cli"]

@@ -2,6 +2,8 @@
 import os
 import pandas as pd
 from google.cloud import geminidataanalytics
+# TODO: upgrade (breaks dict mapping logic)
+# from google.cloud import geminidataanalytics_v1beta as geminidataanalytics
 from google.auth import default
 from google.auth.transport.requests import Request as gRequest
 from google.api_core import exceptions
@@ -51,25 +53,6 @@ class LookerAgentClient:
                     )
                 )
             )
-        else:
-            token = self._get_auth_token()
-            if token:
-                self.credentials = geminidataanalytics.Credentials(
-                    oauth=geminidataanalytics.OAuthCredentials(
-                        token=geminidataanalytics.OAuthCredentials.TokenBased(
-                            access_token=token
-                        )
-                    )
-                )
-
-    def _get_auth_token(self):
-        """Gets the auth token using Application Default Credentials."""
-        credentials, _ = default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
-        auth_req = gRequest()
-        credentials.refresh(auth_req)
-        if credentials.valid:
-            return credentials.token
-        return None
 
     def _build_context(
         self,
@@ -190,6 +173,9 @@ class LookerAgentClient:
             else:
                 out[k] = self._value_to_dict(d[k])
         return out
+    
+    #TODO - use Looker SDK to get model reference and vis config from qid
+    #TODO - use Looker SDK to get SQL for model reference or qid
 
     def chat(
         self,
@@ -198,7 +184,7 @@ class LookerAgentClient:
         skip_agent_use: bool = False,
         agent_id: str = None,
         conversation_id: str = None,
-    ) -> tuple[str | None, pd.DataFrame | None, dict | None, str | None, dict | None]:
+    ) -> tuple[str | None, pd.DataFrame | None, dict | None, str | None, dict | None, list | None, list | None]:
         """Sends a message to a conversation and returns the generated SQL and DataFrame."""
         # messages = [geminidataanalytics.Message()]
         # messages[0].user_message.text = question
@@ -227,7 +213,7 @@ class LookerAgentClient:
             )
 
         log_request = copy.deepcopy(request)
-        if log_request.conversation_reference.data_agent_context.credentials.oauth.secret:
+        if log_request.conversation_reference.data_agent_context.credentials and log_request.conversation_reference.data_agent_context.credentials.oauth.secret:
             log_request.conversation_reference.data_agent_context.credentials.oauth.secret.client_id = "[MASKED]"
             log_request.conversation_reference.data_agent_context.credentials.oauth.secret.client_secret = "[MASKED]"
         logger.debug(f"Chat request: {log_request}")
@@ -238,30 +224,50 @@ class LookerAgentClient:
         generated_looker_query = None
         generated_text = None
         generated_chart = None
+        dimensions = []
+        measures = []
         data_rows = []
         fields = []
 
+        # https://cloud.google.com/gemini/docs/conversational-analytics-api/reference/rest/v1alpha/Message
         for response in stream:
-            logger.debug(response)
             if response.system_message:
                 system_message = response.system_message
                 data_message = response.system_message.data
                 text_message = response.system_message.text
+                #TODO: add analysis
+                analysis_message = response.system_message.analysis
                 # print(f"Received data message: {data_message}")
                 # print(f"Received text message: {text_message}")
                 if "generated_sql" in data_message:
+                    logger.debug(response)
                     if generated_sql is None:
                         generated_sql = ""
                     generated_sql += data_message.generated_sql
                 if "generated_looker_query" in data_message:
-                    if generated_looker_query is None:
-                        generated_looker_query = {}
+                    logger.debug(response)
+                    # if generated_looker_query is None:
+                    #     generated_looker_query = {}
                     generated_looker_query = data_message.generated_looker_query
-                elif "query" in data_message and hasattr(data_message.query, "looker"):
-                    if generated_looker_query is None:
-                        generated_looker_query = {}
+                elif "query" in data_message and "looker" in data_message.query:
                     generated_looker_query = data_message.query.looker
+                    if "datasources" in data_message.query:
+                        for ds in data_message.query.datasources:
+                            if "schema" in ds:
+                                looker_query_field_schema = ds.schema
+                                schema_map = {
+                                    f.name: f.category
+                                    for f in looker_query_field_schema.fields
+                                }
+                                for field in generated_looker_query.fields:
+                                    category = schema_map.get(field)
+                                    if category == "DIMENSION":
+                                        dimensions.append(field)
+                                    elif category == "MEASURE":
+                                        measures.append(field)
+
                 if "result" in data_message:
+                    logger.debug(response)
                     if not fields:
                         fields = [
                             field.name for field in data_message.result.schema.fields
@@ -270,10 +276,20 @@ class LookerAgentClient:
                         row = {field: el[field] for field in fields}
                         data_rows.append(row)
                 if text_message:
+                    # https://cloud.google.com/gemini/docs/conversational-analytics-api/reference/rest/v1alpha/Message#texttype
+                    # TODO: improve logic for final response vs intermediate text
+                    # system_message {
+                    #   text {
+                    #     parts: "The product ID for Churchill Cigars is P328."
+                    #     text_type: FINAL_RESPONSE
+                    #   }
+                    # }
+                    logger.debug(response)
                     if generated_text is None:
                         generated_text = ""
                     generated_text += str(text_message.parts)
                 if "chart" in system_message:
+                    logger.debug(response)
                     logger.debug("chart found in response")
                     if "query" in system_message.chart:
                         print(system_message.chart.query.instructions)
@@ -286,4 +302,4 @@ class LookerAgentClient:
         if data_rows:
             generated_df = pd.DataFrame(data_rows)
 
-        return generated_sql, generated_df, generated_looker_query, generated_text, generated_chart
+        return generated_sql, generated_df, generated_looker_query, generated_text, generated_chart, dimensions, measures

@@ -1,5 +1,6 @@
 import json
 import logging
+from proto.marshal.collections.repeated import RepeatedComposite
 
 logger = logging.getLogger(__name__)
 
@@ -10,8 +11,27 @@ def semantic_correctness(generated_query, reference_query):
     """
     if reference_query is None:
         return None
+    
+    equivalent_timeframes = {'time','second','minute','hour','date','week','month','year'}
+    equivalent_fiscal_timeframes = {'fiscal_quarter','fiscal_year'}
 
     scores = {}
+
+    def get_dimension_group_field_root(field_name):
+        "remove trailing timeframe to do a comparison on the dimension group reference"
+        parts = field_name.split('.')
+        if len(parts) != 2:
+            return field_name
+        
+        view, field = parts
+        if '_' in field:
+            field_parts = field.rsplit('_',1)
+            if len(field_parts) == 2:
+                base, suffix = field_parts
+                if suffix in equivalent_timeframes or suffix in equivalent_fiscal_timeframes:
+                    return f"{view}.{base}"
+        return field_name
+
 
     ## TO DO: when CA support for multi model
     # 1. Compare Model
@@ -26,20 +46,19 @@ def semantic_correctness(generated_query, reference_query):
     # 3. Compare Fields (Weight: 0.6)
     generated_fields = set(generated_query.fields)
     reference_fields = set(reference_query.get('fields', []))
-    logger.debug(f"Generated Fields: {generated_fields}")
-    logger.debug(f"Reference Fields: {reference_fields}")
+    logger.debug(f"Generated Query Fields: {generated_fields}")
+    logger.debug(f"Reference Query Fields: {reference_fields}")
     if not reference_fields:
         return None
 
     intersection = len(generated_fields.intersection(reference_fields))
     union = len(generated_fields.union(reference_fields))
     scores['fields'] = 0.6 * (intersection / union) if union > 0 else 0.0
-    logger.debug(f"Fields Score: {scores['fields']}")
+    logger.debug(f"Semantic Fields Score: {scores['fields']}")
 
     # 4. Compare Filters (Weight: 0.4)
-    # TODO: improve logic as wildcards could result in different result sets
     def normalize_filters(filters):
-        if isinstance(filters, list):
+        if isinstance(filters, (list, RepeatedComposite)):
             return {f.field: str(f.value).strip().lower().replace('%', '') for f in filters}
         elif isinstance(filters, dict):
             return {k: str(v).strip().lower().replace('%', '') for k, v in filters.items()}
@@ -47,8 +66,8 @@ def semantic_correctness(generated_query, reference_query):
 
     generated_filters = normalize_filters(generated_query.filters)
     reference_filters = normalize_filters(reference_query.get('filters'))
-    logger.debug(f"Generated Filters: {generated_filters}")
-    logger.debug(f"Reference Filters: {reference_filters}")
+    logger.debug(f"Generated Query Filters: {generated_filters}")
+    logger.debug(f"Reference Query Filters: {reference_filters}")
 
     if reference_filters:
         gen_keys = set(generated_filters.keys())
@@ -61,12 +80,24 @@ def semantic_correctness(generated_query, reference_query):
                 key_matches += 1
                 matched_ref_keys.add(gen_key)
             else:
-                gen_key_field = gen_key.split('.')[-1]
+                gen_key_root = get_dimension_group_field_root(gen_key)
+                found_match = False
                 for ref_key in ref_keys:
-                    if ref_key not in matched_ref_keys and ref_key.split('.')[-1] == gen_key_field:
-                        key_matches += 0.5
-                        matched_ref_keys.add(ref_key)
-                        break
+                    if ref_key not in matched_ref_keys:
+                        ref_key_root = get_dimension_group_field_root(ref_key)
+                        if gen_key_root == ref_key_root:
+                            key_matches += 1  # Matching root of infered dimension group correct
+                            matched_ref_keys.add(ref_key)
+                            found_match = True
+                            break
+                # TODO: decide if partial credit to be given for matching field in different view
+                # if not found_match:
+                #     gen_key_field = gen_key.split('.')[-1]
+                #     for ref_key in ref_keys:
+                #         if ref_key not in matched_ref_keys and ref_key.split('.')[-1] == gen_key_field:
+                #             key_matches += 0.5
+                #             matched_ref_keys.add(ref_key)
+                #             break
         
         key_score = key_matches / len(ref_keys) if ref_keys else 1.0
 
@@ -84,8 +115,8 @@ def semantic_correctness(generated_query, reference_query):
         scores['filters'] = 0.4 * filter_score
     else:
         scores['filters'] = 0.4
-    logger.debug(f"Filter Score: {scores['filters']}")
+    logger.debug(f"Semantic Filter Score: {scores['filters']}")
 
     final_score = sum(scores.values())
-    logger.debug(f"Final Score: {final_score}")
+    logger.debug(f"Final Semantic Correctness Score: {final_score}")
     return final_score

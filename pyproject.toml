@@ -13,7 +13,7 @@ dependencies = [
     "datacompy>=0.7.3",
     "google-cloud>=0.34.0",
     "google-cloud-aiplatform[evaluation]>=1.118.0",
-    "google-cloud-geminidataanalytics==0.4.0",
+    "google-cloud-geminidataanalytics==0.6.0",
     "pandas>=2.3.2",
     "python-dotenv>=1.1.1",
     "ruff>=0.13.3",

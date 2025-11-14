@@ -5,7 +5,7 @@ import typer
 import pandas as pd
 import datetime
 import logging
-from google.cloud import geminidataanalytics
+from google.cloud import geminidataanalytics_v1beta as geminidataanalytics
 from utils.auth import check_gcloud_auth
 from typing_extensions import Annotated
 
@@ -177,7 +177,9 @@ def looker(
         if is_correct:
             correct_questions += 1
 
-        serialized_looker_query = geminidataanalytics.LookerQuery.to_dict(generated_looker_query)
+        serialized_looker_query = None
+        if generated_looker_query:
+            serialized_looker_query = geminidataanalytics.LookerQuery.to_dict(generated_looker_query)
 
         evaluation_metrics = {
             "semantic_correctness": {

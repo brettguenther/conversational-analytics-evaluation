@@ -1,9 +1,9 @@
 """Looker Agent Client."""
 import os
 import pandas as pd
-from google.cloud import geminidataanalytics
-# TODO: upgrade (breaks dict mapping logic)
-# from google.cloud import geminidataanalytics_v1beta as geminidataanalytics
+# TODO: upgrade to default when python sdk cuts over to beta default
+# from google.cloud import geminidataanalytics
+from google.cloud import geminidataanalytics_v1beta as geminidataanalytics
 from google.auth import default
 from google.auth.transport.requests import Request as gRequest
 from google.api_core import exceptions

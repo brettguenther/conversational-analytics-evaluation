@@ -43,10 +43,10 @@ uv run ca-eval looker \
     --project-id=YOUR_PROJECT_ID \
     --location=us-central1 \
     --looker-instance=https://your.looker.instance.com \
-    --looker-model=your_looker_model \
-    --looker-explore=your_looker_explore \
+    --model-explore=your_looker_model/your_looker_explore \
+    --model-explore=your_looker_model/another_explore \
     --questions-file=data/questions/questions.json \
-    --llm-eval
+    --llm-eval \
     --generate-report
 ```
 
@@ -55,8 +55,7 @@ uv run ca-eval looker \
 -   `--project-id`: Your Google Cloud project ID.
 -   `--location`: The GCP location for the agent (e.g., `us-central1`). Defaults to `global`.
 -   `--looker-instance`: The URL of your Looker instance.
--   `--looker-model`: The LookML model to use.
--   `--looker-explore`: The Looker Explore to use.
+-   `--model-explore`: The LookML model and explore to use, in the format `model_name/explore_name`. This option can be specified multiple times to include several explores or separated via comma's. The Looker agent can accept up to 5 model / explore pairs.
 -   `--questions-file`: Path to the JSON file containing evaluation questions.
 -   `--system-instructions-file`: (Optional) Path to a file containing system instructions for the agent.
 -   `--agent-id`: (Optional) The ID of the data agent to use. If not provided, a new agent with a unique ID will be created for the run.

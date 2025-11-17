@@ -2,6 +2,7 @@ import os
 import json
 import uuid
 import typer
+from typing import List, Optional
 import pandas as pd
 import datetime
 import logging
@@ -11,14 +12,33 @@ from typing_extensions import Annotated
 
 app = typer.Typer()
 
+def parse_comma_list(value: Optional[List[str]]) -> List[str]:
+    if not value:
+        return []
+    
+    items = []
+    for v in value:
+        # Split by comma and strip whitespace from each item
+        split_items = [item.strip() for item in v.split(",")]
+        items.extend(split_items)
+    
+    return items
+
 @app.command()
 def looker(
     questions_file: Annotated[str, typer.Option(help="Path to the JSON file with evaluation questions.")] = "data/questions/questions.json",
     project_id: Annotated[str, typer.Option(help="Google Cloud project ID.")] = ...,
     location: Annotated[str, typer.Option(help="The location for the agent.")] = "global",
     looker_instance: Annotated[str, typer.Option(help="Looker instance URL.")] = ...,
-    looker_model: Annotated[str, typer.Option(help="Looker model name.")] = ...,
-    looker_explore: Annotated[str, typer.Option(help="Looker explore name.")] = ...,
+    model_explore: Annotated[
+        Optional[List[str]],
+        typer.Option(
+            "--model-explore",
+            help="Model and explore pair. Supports comma separation (e.g., 'model/explore,model2/explore2') or repeated flags.",
+            show_default=False,
+            callback=parse_comma_list,
+        ),
+    ] = [],
     agent_id: Annotated[str, typer.Option(help="The ID for the data agent.")] = None,
     conversation_id: Annotated[str, typer.Option(help="The ID for the conversation.")] = None,
     system_instructions_file: Annotated[str, typer.Option(help="Path to a file containing system instructions.")] = None,
@@ -92,12 +112,26 @@ def looker(
         if agent_id is None:
             agent_id = f"agent-{uuid.uuid4()}"
         logging.info(f"Creating data agent '{agent_id}'...")
+
+        explores = []
+        if model_explore:
+            for pair in model_explore:
+                try:
+                    model, explore = pair.split("/")
+                    explores.append((model, explore))
+                except ValueError:
+                    logging.error(
+                        f"Invalid format for --model-explore: {pair}. "
+                        "Expected 'model_name/explore_name'."
+                    )
+                    return
+        logging.debug(f"Final explores: {explores}")
+
         agent = looker_client.create_agent(
             agent_id=agent_id,
             system_instruction=system_instruction,
             looker_instance_uri=looker_instance,
-            lookml_model=looker_model,
-            explore=looker_explore,
+            explores=explores,
         )
 
         if not agent:

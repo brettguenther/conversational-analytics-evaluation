@@ -34,7 +34,7 @@ If using LLM based evaluations, ensure the user or service has the required role
 
 ## Running the Evaluation
 
-The main entry point for running evaluations is the `cli/cli.py` script, which is exposed as the `ca-eval` command.
+The main entry point for running evaluations is the `cli/cli.py` script, which is exposed as the `ca-eval` command. An evaluation run will generate a json representation of the results in the `results` folder with the filenaming convention of `evaluation_results_{date}-{time}.json`.
 
 ### Example Command
 

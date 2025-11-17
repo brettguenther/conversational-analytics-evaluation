@@ -1,4 +1,4 @@
-name: Python Tests
+name: Metric Tests
 
 on:
   pull_request:

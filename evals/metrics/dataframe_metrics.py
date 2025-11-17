@@ -77,9 +77,15 @@ class DataFrameMatch(DataFrameMetric):
 
             join_cols = common_cols
             if fields and fields.get("dimensions"):
+                #have dimensions to do common join on dimensions
                 dims_in_common = list(set(fields.get("dimensions")) & set(common_cols))
                 if dims_in_common:
                     join_cols = dims_in_common
+            elif fields and fields.get("measures"):
+                # no dimensions have measures to do exact match
+                measures_in_common = list(set(fields.get("measures")) & set(common_cols))
+                if measures_in_common:
+                    join_cols = measures_in_common
 
             compare = datacompy.Compare(
                 gen_subset_df,

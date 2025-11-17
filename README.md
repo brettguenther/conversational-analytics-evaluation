@@ -20,8 +20,17 @@ This framework is designed to evaluate the performance of Google's Gemini Data A
 
     Alternatively, a looker access token can be passed into the cli
 
-3. **Provide a GCP Auth Token:**
+3. **Enable the required Google Cloud APIs:**
+ Enable the required APIs on the project you will use to authenticate your Gemini Data Analytics API requests: `geminidataanalytics.googleapis.com`,`cloudaicompanion.googleapis.com`,`bigquery.googleapis.com`.
+
+ If using LLM based evaluations, enable the Vertex AI API (`aiplatform.googleapis.com`).
+
+4. **Provide a GCP Auth Token:**
     `gcloud auth application-default login`
+
+Ensure your user has the needed roles to create bigquery jobs, access as a Looker User, or create a dedicated Service Account. Grant access to the needed Bigquery tables or Looker Explores you will be using as Conversational Analytics data sources.
+
+If using LLM based evaluations, ensure the user or service has the required roles to use Vertex AI (`roles/aiplatform.user`).
 
 ## Running the Evaluation
 
@@ -31,13 +40,14 @@ The main entry point for running evaluations is the `cli/cli.py` script, which i
 
 ```bash
 uv run ca-eval looker \
-    --project-id="YOUR_PROJECT_ID" \
-    --location="us-central1" \
-    --looker-instance="https://your.looker.instance.com" \
-    --looker-model="your_looker_model" \
-    --looker-explore="your_looker_explore" \
+    --project-id=YOUR_PROJECT_ID \
+    --location=us-central1 \
+    --looker-instance=https://your.looker.instance.com \
+    --looker-model=your_looker_model \
+    --looker-explore=your_looker_explore \
     --questions-file=data/questions/questions.json \
     --llm-eval
+    --generate-report
 ```
 
 ### Command-line Options
@@ -103,13 +113,13 @@ The evaluation process is centered around a set of questions defined in a JSON f
 1.  **Agent Interaction**: The agent is presented with a natural language question.
 2.  **Query Generation**: The agent generates a Looker query based on its understanding of the question.
 3.  **Data Retrieval**: The generated query is executed against the Looker instance to retrieve a dataframe.
-4.  **Scoring**: The agent's response is evaluated against the reference data using a suite of metrics.
+4.  **Scoring**: The agent's response is evaluated against the reference data using a suite of metrics. These can be deterministic or using an "LLM as a judge" technique.
 
 The final score for each question is a weighted average of the following metrics:
 
 ### Semantic Correctness
 
-This metric compares the agent's generated Looker query to the `reference_query` provided in the question's data. The comparison is broken down into the following components, each with its own weight:
+This deterministic metric compares the agent's generated Looker query to the `reference_query` provided in the question's data. The comparison is broken down into the following components, each with its own weight:
 
 *   **Model and Explore (20%)**: Checks for an exact match of the Looker model and explore.
 *   **Fields (40%)**: Compares the set of fields in the generated query with the reference query. Partial credit is awarded based on the Jaccard similarity between the two sets of fields.
@@ -120,29 +130,30 @@ This metric compares the agent's generated Looker query to the `reference_query`
 
 ### DataFrame Correctness (`DataFrameMatch`)
 
-This metric evaluates the similarity between the dataframe produced by the agent's query and the `expected_result` dataframe.
+This deterministic metric evaluates the similarity between the dataframe produced by the agent's query and the `expected_result` dataframe.
 
 *   **Column Similarity (30%)**: It calculates the Jaccard similarity between the column names of the two dataframes.
-*   **Data Similarity (70%)**: For the common columns, it performs a row-by-row comparison of the data using the `datacompy` library. This allows for tolerance in data types and floating-point precision.
+*   **Data Similarity (70%)**: For the common dimensions, it performs a comparison of the data using the `datacompy` library to handle row ordering differences. This allows for tolerance in data types and floating-point precision.
 
-The final `DataFrameMatch` score is a weighted average of the column and. data similarity scores.
+The final `DataFrameMatch` score is a weighted average of the column and data similarity scores.
 
 ### Text-based Similarity (`ROUGE`)
 
-For questions categorized as "Simple", an additional `TextSimilarity` metric is used. This metric calculates the ROUGE score between the agent's natural language response and the `expected_result_text`. This is useful for evaluating answers that are simple facts or single values.
+For questions categorized as "Simple", an additional `TextSimilarity` deterministic metric is used. This metric calculates the ROUGE score between the agent's natural language response and the `expected_result_text`. This is useful for evaluating answers that are simple facts or single values.
 
 ### LLM-based Metrics
 
-This set of metrics leverages a large language model to evaluate the quality of the agent's response in two key areas:
+This set of metrics leverages a large language model to evaluate the quality of the agent's response in up to three key areas:
 
 *   **Intent Resolution**: This metric assesses whether the agent's response directly and accurately addresses the user's question or instruction. It uses a pointwise rating system where the LLM determines if the response fully matches, partially matches, or does not match the user's intent.
 *   **Completeness**: This metric evaluates if the agent's response provides all the necessary information to be considered a complete answer, without leaving out important details. The LLM rates the response as fully complete, partially complete, or incomplete.
+*   **Chart Appropriateness**: This metric evaluates if the agent's selected output visualization is a good fit for the data structure and input question.
 
-These metrics are particularly useful for understanding the nuances of the agent's conversational abilities beyond simple data correctness.
+These metrics are particularly useful for understanding the nuances of the agent's conversational abilities beyond simple data correctness. Note, the framework does not evaluate the reasoning steps the agent takes (commonly referred to as an auto-eval judge).
 
 ### Chart Correctness
 
-This metric evaluates the correctness of charts generated by the agent. When a question expects a chart as part of the answer, this metric compares the generated chart's specification against a reference chart. The comparison is based on three key aspects:
+This metric is a deterministic check that evaluates the correctness of charts generated by the agent. When a question expects a chart as part of the answer, this metric compares the generated chart's specification against a reference chart. The comparison is based on three key aspects:
 
 *   **Mark Type**: Checks if the chart type (e.g., `bar`, `line`) matches the expected type.
 *   **X-axis Field**: Verifies that the correct data field is used for the x-axis.

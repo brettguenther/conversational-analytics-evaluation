@@ -17,6 +17,6 @@ jobs:
     - name: Install dependencies
       run: |
         pip install uv
-        uv sync --ci
+        uv sync
     - name: Run tests
       run: uv run -m unittest discover tests

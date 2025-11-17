@@ -24,10 +24,10 @@ class TestLLMBasedMetrics(unittest.TestCase):
         # Mock the EvalResult and its metrics_table
         mock_eval_result = MagicMock()
         mock_metrics_data = {
-            'intent_resolution_score': [1.0],
-            'intent_resolution_explanation': ['The response directly answers the question.'],
-            'completeness_score': [0.0],
-            'completeness_explanation': ['The response is missing some details.']
+            'intent_resolution/score': [1.0],
+            'intent_resolution/explanation': ['The response directly answers the question.'],
+            'completeness/score': [0.0],
+            'completeness/explanation': ['The response is missing some details.']
         }
         mock_eval_result.metrics_table = pd.DataFrame(mock_metrics_data)
         
@@ -40,7 +40,8 @@ class TestLLMBasedMetrics(unittest.TestCase):
         result = metric.evaluate(
             question="What are the total sales?",
             generated_text="The total sales are $1M.",
-            generated_df=pd.DataFrame({'sales': [1000000]})
+            generated_df=pd.DataFrame({'sales': [1000000]}),
+            generated_chart=None
         )
 
         # Assert
@@ -74,7 +75,8 @@ class TestLLMBasedMetrics(unittest.TestCase):
         result = metric.evaluate(
             question="What are the total sales?",
             generated_text="The total sales are $1M.",
-            generated_df=pd.DataFrame({'sales': [1000000]})
+            generated_df=pd.DataFrame({'sales': [1000000]}),
+            generated_chart=None
         )
 
         # Assert

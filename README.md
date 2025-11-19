@@ -44,8 +44,7 @@ uv run ca-eval looker \
     --project-id=YOUR_PROJECT_ID \
     --location=us-central1 \
     --looker-instance=https://your.looker.instance.com \
-    --model-explore=your_looker_model/your_looker_explore \
-    --model-explore=your_looker_model/another_explore \
+    --model-explore=your_looker_model/your_looker_explore,your_looker_model/another_explore \
     --questions-file=data/questions/questions.json \
     --llm-eval \
     --generate-report

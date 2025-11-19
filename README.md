@@ -1,40 +1,41 @@
-# Conversational Analytics API Evaluation Framework
+# Conversational Analytics Evaluation Framework
 
-This framework is designed to evaluate the performance of Google's Gemini Data Analytics API, specifically for conversational agents built on Looker data models.
+This framework is designed to evaluate the response quality of Conversational Analytics via Google's Gemini Data Analytics API, specifically for conversational agents built on Looker data models.
 
 ## Setup
 
 1.  **Install dependencies:**
-    This project uses `uv` for package management. To install the required dependencies, run:
-    ```bash
-    uv sync
-    ```
+
+  This project uses `uv` for package management. To install the required dependencies, run:
+  ```bash
+  uv sync
+  ```
 
 2.  **Configure Looker API Credentials:**
-    Create a `.env` file in the root of the project with your Looker API client ID and secret:
-    ```bash
-    touch .env
-    echo "LOOKER_CLIENT_ID={myClientId}" >> .env
-    echo "LOOKER_CLIENT_SECRET={mySecret}" >> .env
-    ```
 
-    Alternatively, a looker access token can be passed into the cli
+  Create a `.env` file in the root of the project with your Looker API client ID and secret:
+  ```bash
+  touch .env
+  echo "LOOKER_CLIENT_ID={myClientId}" >> .env
+  echo "LOOKER_CLIENT_SECRET={mySecret}" >> .env
+  ```
+
+  Alternatively, a Looker access token can be passed into the cli. Ensure the Looker service account or user associated with the API credentials has the correct permissions to create nad use agents as well as access the Looker models.
 
 3. **Enable the required Google Cloud APIs:**
- Enable the required APIs on the project you will use to authenticate your Gemini Data Analytics API requests: `geminidataanalytics.googleapis.com`,`cloudaicompanion.googleapis.com`,`bigquery.googleapis.com`.
 
- If using LLM based evaluations, enable the Vertex AI API (`aiplatform.googleapis.com`).
+  Enable the required APIs on the project you will use to authenticate your Gemini Data Analytics API requests: `geminidataanalytics.googleapis.com`,`cloudaicompanion.googleapis.com`,`bigquery.googleapis.com`.
+
+  If using LLM based evaluations, enable the Vertex AI API (`aiplatform.googleapis.com`).
 
 4. **Provide a GCP Auth Token:**
-    `gcloud auth application-default login`
+  `gcloud auth application-default login`
 
-Ensure your user has the needed roles to create bigquery jobs, access as a Looker User, or create a dedicated Service Account. Grant access to the needed Bigquery tables or Looker Explores you will be using as Conversational Analytics data sources.
-
-If using LLM based evaluations, ensure the user or service has the required roles to use Vertex AI (`roles/aiplatform.user`).
+  If using LLM based evaluations, ensure the user or service account has the required roles to use Vertex AI (`roles/aiplatform.user`).
 
 ## Running the Evaluation
 
-The main entry point for running evaluations is the `cli/cli.py` script, which is exposed as the `ca-eval` command. An evaluation run will generate a json representation of the results in the `results` folder with the filenaming convention of `evaluation_results_{date}-{time}.json`.
+  The main entry point for running evaluations is the `cli/cli.py` script, which is exposed as the `ca-eval` command. An evaluation run will generate a json representation of the results in the `results` folder with the filenaming convention of `evaluation_results_{date}-{time}.json`.
 
 ### Example Command
 
@@ -107,12 +108,11 @@ Evaluation questions are defined in JSON files in the `data/questions/` director
 
 ## Methodology
 
-The evaluation process is centered around a set of questions defined in a JSON file. For each question, the framework performs the following steps:
+The evaluation process is centered around a set of "question - expected response" pairs defined in a JSON file. For each question, the framework performs the following steps:
 
 1.  **Agent Interaction**: The agent is presented with a natural language question.
-2.  **Query Generation**: The agent generates a Looker query based on its understanding of the question.
-3.  **Data Retrieval**: The generated query is executed against the Looker instance to retrieve a dataframe.
-4.  **Scoring**: The agent's response is evaluated against the reference data using a suite of metrics. These can be deterministic or using an "LLM as a judge" technique.
+2.  **Query Generation**: The agent generates a Looker query based on its understanding of the question and returns data result along with a natural language response and optionally a chart.
+3.  **Scoring**: The agent's response is evaluated against the reference data using a suite of metrics. These can be deterministic or using an "LLM as a judge" technique.
 
 The final score for each question is a weighted average of the following metrics:
 
@@ -132,13 +132,13 @@ This deterministic metric compares the agent's generated Looker query to the `re
 This deterministic metric evaluates the similarity between the dataframe produced by the agent's query and the `expected_result` dataframe.
 
 *   **Column Similarity (30%)**: It calculates the Jaccard similarity between the column names of the two dataframes.
-*   **Data Similarity (70%)**: For the common dimensions, it performs a comparison of the data using the `datacompy` library to handle row ordering differences. This allows for tolerance in data types and floating-point precision.
+*   **Data Similarity (70%)**: For the common dimensions, it performs a comparison of the data using the `datacompy` library to handle row ordering differences joining the dataframes on common Looker dimensions when present. This also allows for tolerance in data types and floating-point precision.
 
 The final `DataFrameMatch` score is a weighted average of the column and data similarity scores.
 
 ### Text-based Similarity (`ROUGE`)
 
-For questions categorized as "Simple", an additional `TextSimilarity` deterministic metric is used. This metric calculates the ROUGE score between the agent's natural language response and the `expected_result_text`. This is useful for evaluating answers that are simple facts or single values.
+For questions categorized as "Simple", an additional `TextSimilarity` deterministic metric is used. This metric calculates the ROUGE score between the agent's natural language response and the `expected_result_text`. This is useful for evaluating answers that are simple descriptive facts or single values.
 
 ### LLM-based Metrics
 
@@ -148,7 +148,7 @@ This set of metrics leverages a large language model to evaluate the quality of 
 *   **Completeness**: This metric evaluates if the agent's response provides all the necessary information to be considered a complete answer, without leaving out important details. The LLM rates the response as fully complete, partially complete, or incomplete.
 *   **Chart Appropriateness**: This metric evaluates if the agent's selected output visualization is a good fit for the data structure and input question.
 
-These metrics are particularly useful for understanding the nuances of the agent's conversational abilities beyond simple data correctness. Note, the framework does not evaluate the reasoning steps the agent takes (commonly referred to as an auto-eval judge).
+These metrics are particularly useful for understanding the nuances of the agent's conversational abilities beyond simple data correctness. Note, the framework does not currently evaluate the reasoning steps the agent takes (commonly referred to as an auto-eval judge).
 
 ### Chart Correctness
 

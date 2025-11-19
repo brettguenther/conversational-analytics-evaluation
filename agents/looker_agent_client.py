@@ -58,20 +58,21 @@ class LookerAgentClient:
         self,
         system_instruction: str,
         looker_instance_uri: str,
-        lookml_model: str,
-        explore: str,
+        explores: list[tuple[str, str]],
         enable_python_analysis: bool = False,
     ) -> geminidataanalytics.Context:
         """Builds the context for the agent."""
-        looker_explore_reference = geminidataanalytics.LookerExploreReference()
-        looker_explore_reference.looker_instance_uri = looker_instance_uri
-        looker_explore_reference.lookml_model = lookml_model
-        looker_explore_reference.explore = explore
+        explore_references = []
+        for model, explore in explores:
+            looker_explore_reference = geminidataanalytics.LookerExploreReference(
+                looker_instance_uri=looker_instance_uri,
+                lookml_model=model,
+                explore=explore,
+            )
+            explore_references.append(looker_explore_reference)
 
         datasource_references = geminidataanalytics.DatasourceReferences()
-        datasource_references.looker.explore_references = [
-            looker_explore_reference
-        ]
+        datasource_references.looker.explore_references = explore_references
 
         context = geminidataanalytics.Context()
         context.system_instruction = system_instruction
@@ -95,16 +96,14 @@ class LookerAgentClient:
         agent_id: str,
         system_instruction: str,
         looker_instance_uri: str,
-        lookml_model: str,
-        explore: str,
+        explores: list[tuple[str, str]],
         enable_python_analysis: bool = False,
     ):
         """Creates a new data agent."""
         published_context = self._build_context(
             system_instruction,
             looker_instance_uri,
-            lookml_model,
-            explore,
+            explores,
             enable_python_analysis,
         )
 
@@ -235,7 +234,7 @@ class LookerAgentClient:
                 system_message = response.system_message
                 data_message = response.system_message.data
                 text_message = response.system_message.text
-                #TODO: add analysis
+                #TODO: add python analysis
                 analysis_message = response.system_message.analysis
                 # print(f"Received data message: {data_message}")
                 # print(f"Received text message: {text_message}")

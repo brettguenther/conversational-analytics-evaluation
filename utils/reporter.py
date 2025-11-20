@@ -21,9 +21,64 @@ def generate_markdown_report(evaluation_results, filename="evaluation_report.md"
         f.write(f"- **Accuracy:** {summary.get('accuracy', 0.0):.2f}\n")
         f.write(f"- **Timestamp:** {summary.get('timestamp', 'N/A')}\n\n")
 
+        results = evaluation_results.get("results", [])
+        
+        # Prepare data for the summary table
+        table_data = []
+        metric_names = []
+        if results:
+            all_metric_names = set()
+            for result in results:
+                metrics = result.get("evaluation_metrics", {})
+                for metric, value in metrics.items():
+                    if metric == 'llm_based_evaluation' and isinstance(value, dict):
+                        for llm_metric in value.keys():
+                            all_metric_names.add(llm_metric)
+                    elif metric != 'overall_correctness':
+                        all_metric_names.add(metric)
+            metric_names = sorted(list(all_metric_names))
+        
+        for result in results:
+            question_details = result.get("question_details", {})
+            evaluation_metrics = result.get("evaluation_metrics", {})
+            row = {
+                "Question ID": question_details.get("id", "N/A"),
+                "Category": question_details.get("category", "N/A"),
+                "Overall Score": "Correct" if evaluation_metrics.get("overall_correctness", False) else "Incorrect"
+            }
+            for metric in metric_names:
+                score = "N/A"
+                if metric in evaluation_metrics:
+                    metric_value = evaluation_metrics[metric]
+                    if isinstance(metric_value, dict) and 'details' in metric_value:
+                        try:
+                            score = float(metric_value['details'].split(': ')[1])
+                        except (ValueError, IndexError):
+                            score = "N/A"
+                    elif isinstance(metric_value, dict) and 'score' in metric_value:
+                        score = metric_value.get('score', 'N/A')
+
+                elif 'llm_based_evaluation' in evaluation_metrics and metric in evaluation_metrics['llm_based_evaluation']:
+                    llm_metric_value = evaluation_metrics['llm_based_evaluation'][metric]
+                    if isinstance(llm_metric_value, dict):
+                        score = llm_metric_value.get('score', 'N/A')
+                
+                row[metric] = f"{score:.2f}" if isinstance(score, float) else score
+
+            table_data.append(row)
+
+        # Write the summary table
+        if table_data:
+            header = ["Question ID", "Category", "Overall Score"] + metric_names
+            f.write("| " + " | ".join(header) + " |\n")
+            f.write("|" + "---|" * len(header) + "\n")
+            for row in table_data:
+                f.write("| " + " | ".join(str(row.get(h, "N/A")) for h in header) + " |\n")
+            f.write("\n")
+
+
         f.write("## Detailed Results\n\n")
 
-        results = evaluation_results.get("results", [])
         for i, result in enumerate(results):
             question_details = result.get("question_details", {})
             agent_response = result.get("agent_response", {})
@@ -74,5 +129,5 @@ def generate_markdown_report(evaluation_results, filename="evaluation_report.md"
                                 f.write(f"    - {llm_value}\n")
                 elif isinstance(value, dict):
                     f.write(f"- **{metric.replace('_', ' ').title()}:** {'Correct' if value.get('correct') else 'Incorrect'}\n")
-                    f.write(f"  - **Details:** {value.get('details', 'N/A')}\n")
+                    f.write(f"- **Details:** {value.get('details', 'N/A')}\n")
             f.write("\n---\n\n")

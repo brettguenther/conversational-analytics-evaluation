@@ -27,19 +27,24 @@ def generate_markdown_report(evaluation_results, filename="evaluation_report.md"
         table_data = []
         metric_names = []
         if results:
-            first_metrics = results[0].get("evaluation_metrics", {})
-            for metric, value in first_metrics.items():
-                if metric == 'llm_based_evaluation' and isinstance(value, dict):
-                    metric_names.extend(value.keys())
-                elif metric != 'overall_correctness':
-                    metric_names.append(metric)
+            all_metric_names = set()
+            for result in results:
+                metrics = result.get("evaluation_metrics", {})
+                for metric, value in metrics.items():
+                    if metric == 'llm_based_evaluation' and isinstance(value, dict):
+                        for llm_metric in value.keys():
+                            all_metric_names.add(llm_metric)
+                    elif metric != 'overall_correctness':
+                        all_metric_names.add(metric)
+            metric_names = sorted(list(all_metric_names))
         
         for result in results:
             question_details = result.get("question_details", {})
             evaluation_metrics = result.get("evaluation_metrics", {})
             row = {
                 "Question ID": question_details.get("id", "N/A"),
-                "Category": question_details.get("category", "N/A")
+                "Category": question_details.get("category", "N/A"),
+                "Overall Score": "Correct" if evaluation_metrics.get("overall_correctness", False) else "Incorrect"
             }
             for metric in metric_names:
                 score = "N/A"
@@ -64,7 +69,7 @@ def generate_markdown_report(evaluation_results, filename="evaluation_report.md"
 
         # Write the summary table
         if table_data:
-            header = ["Question ID", "Category"] + metric_names
+            header = ["Question ID", "Category", "Overall Score"] + metric_names
             f.write("| " + " | ".join(header) + " |\n")
             f.write("|" + "---|" * len(header) + "\n")
             for row in table_data:

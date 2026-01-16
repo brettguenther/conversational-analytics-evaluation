@@ -1,0 +1,92 @@
+[
+  {
+    "id": "citibike-1",
+    "category": "Simple",
+    "question": "When was the most recent trip in the dataset?",
+    "expected_result_text": "The most recent trip was on 2016-09-30.",
+    "expected_result": [
+      {
+        "trips.start_date": "2016-09-30"
+      }
+    ],
+    "reference_query": {
+      "model": "nyc_citibike_trips",
+      "explore": "trips",
+      "fields": ["trips.start_date"],
+      "sorts": ["trips.start_date desc"],
+      "limit": "1"
+    }
+  },
+  {
+    "id": "citibike-2",
+    "category": "Medium",
+    "question": "What were the top 5 start stations by trip count?",
+    "expected_result_text": "The top start station is E 17 St & Broadway with 291,615 trips.",
+    "expected_result": [
+      {
+        "trips.start_station_name": "E 17 St & Broadway",
+        "trips.count": 291615
+      },
+      { "trips.start_station_name": "8 Ave & W 31 St", "trips.count": 291577 },
+      {
+        "trips.start_station_name": "Lafayette St & E 8 St",
+        "trips.count": 277060
+      },
+      { "trips.start_station_name": "W 21 St & 6 Ave", "trips.count": 275348 },
+      {
+        "trips.start_station_name": "West St & Chambers St",
+        "trips.count": 260911
+      }
+    ],
+    "expected_data_visualization": {
+      "type": "bar",
+      "x-axis": "trips.start_station_name",
+      "y-axis": "trips.count"
+    },
+    "reference_query": {
+      "model": "nyc_citibike_trips",
+      "explore": "trips",
+      "fields": ["trips.start_station_name", "trips.count"],
+      "sorts": ["trips.count desc"],
+      "limit": "5"
+    }
+  },
+  {
+    "id": "citibike-3",
+    "category": "Medium",
+    "question": "What was the average trip duration in August 2016?",
+    "expected_result_text": "The average trip duration in August 2016 was 980.29 seconds.",
+    "expected_result": [{ "trips.average_trip_duration": 980.29 }],
+    "reference_query": {
+      "model": "nyc_citibike_trips",
+      "explore": "trips",
+      "fields": ["trips.average_trip_duration"],
+      "filters": { "trips.start_month": "2016-08" },
+      "limit": "500"
+    }
+  },
+  {
+    "id": "citibike-4",
+    "category": "Medium",
+    "question": "How many trips were taken by each gender in 2016?",
+    "expected_result_text": "In 2016, there were 6,769,032 trips by males, 2,186,917 by females, and 1,306,700 where gender is unknown.",
+    "expected_result": [
+      { "trips.gender": "male", "trips.count": 6769032 },
+      { "trips.gender": "female", "trips.count": 2186917 },
+      { "trips.gender": "unknown", "trips.count": 1306700 }
+    ],
+    "expected_data_visualization": {
+      "type": "bar",
+      "x-axis": "trips.gender",
+      "y-axis": "trips.count"
+    },
+    "reference_query": {
+      "model": "nyc_citibike_trips",
+      "explore": "trips",
+      "fields": ["trips.gender", "trips.count"],
+      "filters": { "trips.start_year": "2016" },
+      "sorts": ["trips.count desc"],
+      "limit": "500"
+    }
+  }
+]

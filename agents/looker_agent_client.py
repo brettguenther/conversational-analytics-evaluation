@@ -517,6 +517,7 @@ class LookerAgentClient:
         explores: list[tuple[str, str]] = None,
         looker_golden_queries: list | dict = None,
         agent_definition: dict = None,
+        thinking_mode: str = None,
     ) -> tuple[str | None, pd.DataFrame | None, dict | None, str | None, dict | None, list | None, list | None]:
         """Sends a message to a conversation and returns the generated SQL, DataFrame, query, text, and chart."""
         if enable_dev_mode and not self.looker_access_token and looker_instance_uri:
@@ -538,6 +539,21 @@ class LookerAgentClient:
             request_kwargs["looker_settings"] = geminidataanalytics.LookerSettings(
                 enable_dev_mode=True
             )
+        if thinking_mode:
+            mode_key = thinking_mode.strip().upper()
+            try:
+                request_kwargs["thinking_mode"] = getattr(
+                    geminidataanalytics.ChatRequest.ThinkingMode, mode_key
+                )
+            except AttributeError as exc:
+                valid_modes = [
+                    e.name
+                    for e in geminidataanalytics.ChatRequest.ThinkingMode
+                    if e.name != "THINKING_MODE_UNSPECIFIED"
+                ]
+                raise ValueError(
+                    f"Invalid thinking_mode '{thinking_mode}'. Expected one of: {', '.join(valid_modes)}"
+                ) from exc
 
         if skip_agent_use:
             request_kwargs["inline_context"] = self._build_context(

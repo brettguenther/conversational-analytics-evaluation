@@ -269,6 +269,7 @@ class LookerAgentHttpClient:
         skip_agent_use: bool = False,  # for compatibility with sdk client
         enable_dev_mode: bool = False,
         looker_instance_uri: str = None,
+        thinking_mode: str = None,
     ) -> tuple[str | None, pd.DataFrame | None, dict | None, str | None]:
         """Sends a chat message to the agent and returns the parsed response."""
         if enable_dev_mode and not self.looker_access_token and looker_instance_uri:
@@ -290,6 +291,13 @@ class LookerAgentHttpClient:
             chat_payload["credentials"] = self.looker_credentials
         if enable_dev_mode:
             chat_payload["looker_settings"] = {"enable_dev_mode": True}
+        if thinking_mode:
+            mode_key = thinking_mode.strip().upper()
+            if mode_key not in ("FAST", "THINKING", "THINKING_MODE_UNSPECIFIED"):
+                raise ValueError(
+                    f"Invalid thinking_mode '{thinking_mode}'. Expected 'FAST' or 'THINKING'."
+                )
+            chat_payload["thinking_mode"] = mode_key
 
         s = requests.Session()
         acc = ""

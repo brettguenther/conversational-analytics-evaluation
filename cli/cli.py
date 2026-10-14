@@ -73,6 +73,13 @@ def looker(
             help="Enable Looker Development Mode via LookerSettings.enable_dev_mode.",
         ),
     ] = False,
+    thinking_mode: Annotated[
+        Optional[str],
+        typer.Option(
+            "--thinking-mode",
+            help="Thinking mode for the agent loop ('FAST' or 'THINKING'). Defaults to THINKING_MODE_UNSPECIFIED.",
+        ),
+    ] = None,
     skip_agent_use: Annotated[
         bool,
         typer.Option(
@@ -198,6 +205,16 @@ def looker(
         )
         return
 
+    if thinking_mode and thinking_mode.strip().upper() not in (
+        "FAST",
+        "THINKING",
+        "THINKING_MODE_UNSPECIFIED",
+    ):
+        logging.error(
+            f"Invalid --thinking-mode '{thinking_mode}'. Expected 'FAST' or 'THINKING'."
+        )
+        return
+
     # 2. Initialize the client
     looker_client = LookerAgentClient(
         project_id=project_id,
@@ -275,6 +292,7 @@ def looker(
             explores=explores,
             looker_golden_queries=looker_golden_queries,
             agent_definition=agent_definition,
+            thinking_mode=thinking_mode,
         )
 
         # Parse expected result string into a DataFrame

@@ -91,7 +91,7 @@ class TestLookerAgentClient(unittest.TestCase):
                     "Weekly sales?",
                 ],
                 "looker_query": {
-                    "model": "wiq-labs",
+                    "model": "ecomm",
                     "explore": "sales",
                     "fields": ["sales.total_sales"],
                     "filters": [
@@ -106,7 +106,7 @@ class TestLookerAgentClient(unittest.TestCase):
             {
                 "question": "Top 5 categories in 2024?",
                 "looker_query": {
-                    "model": "wiq-labs",
+                    "model": "ecomm",
                     "view": "sales",
                     "fields": ["products.category", "sales.total_sales"],
                     "filters": {"sales.calendar_year": 2024},
@@ -119,7 +119,7 @@ class TestLookerAgentClient(unittest.TestCase):
         ctx = client._build_context(
             system_instruction=raw_instruction,
             looker_instance_uri="https://looker.example.com",
-            explores=[("wiq-labs", "sales")],
+            explores=[("ecomm", "sales")],
             looker_golden_queries=golden_queries_payload,
         )
 
@@ -131,7 +131,7 @@ class TestLookerAgentClient(unittest.TestCase):
             list(gq0.natural_language_questions),
             ["What were total sales last week?", "Weekly sales?"],
         )
-        self.assertEqual(gq0.looker_query.model, "wiq-labs")
+        self.assertEqual(gq0.looker_query.model, "ecomm")
         self.assertEqual(gq0.looker_query.explore, "sales")
         self.assertEqual(list(gq0.looker_query.fields), ["sales.total_sales"])
         self.assertEqual(len(gq0.looker_query.filters), 1)
@@ -170,7 +170,7 @@ class TestLookerAgentClient(unittest.TestCase):
             agent_id="existing-agent",
             system_instruction="Updated instruction",
             looker_instance_uri="https://looker.example.com",
-            explores=[("wiq-labs", "sales")],
+            explores=[("ecomm", "sales")],
         )
 
         self.assertEqual(result, expected_agent)
@@ -201,7 +201,7 @@ class TestLookerAgentClient(unittest.TestCase):
                             "explore_references": [
                                 {
                                     "looker_instance_uri": "https://looker.example.com",
-                                    "lookml_model": "wiq-labs",
+                                    "lookml_model": "ecomm",
                                     "explore": "sales",
                                 }
                             ]
@@ -211,7 +211,7 @@ class TestLookerAgentClient(unittest.TestCase):
                         {
                             "natural_language_questions": ["Base question?"],
                             "looker_query": {
-                                "model": "wiq-labs",
+                                "model": "ecomm",
                                 "explore": "sales",
                                 "fields": ["sales.count"],
                             },
@@ -232,7 +232,7 @@ class TestLookerAgentClient(unittest.TestCase):
         self.assertEqual(ctx.system_instruction, "Base agent instruction")
         self.assertEqual(
             ctx.datasource_references.looker.explore_references[0].lookml_model,
-            "wiq-labs",
+            "ecomm",
         )
         self.assertEqual(len(ctx.looker_golden_queries), 1)
         self.assertEqual(len(ctx.glossary_terms), 1)
@@ -255,7 +255,7 @@ class TestLookerAgentClient(unittest.TestCase):
             geminidataanalytics.Message(
                 system_message=geminidataanalytics.SystemMessage(
                     text=geminidataanalytics.TextMessage(
-                        parts=["Sampling data from wiq-labs.sales..."],
+                        parts=["Sampling data from ecomm.sales..."],
                         text_type=geminidataanalytics.TextMessage.TextType.PROGRESS,
                     )
                 )
@@ -283,10 +283,42 @@ class TestLookerAgentClient(unittest.TestCase):
             question="What is total revenue?",
             skip_agent_use=True,
             looker_instance_uri="https://looker.example.com",
-            explores=[("wiq-labs", "sales")],
+            explores=[("ecomm", "sales")],
         )
 
         self.assertEqual(generated_text, "## Final Answer\n\nTotal revenue is $1,234.")
+
+    @patch("agents.looker_agent_client.geminidataanalytics.DataChatServiceClient")
+    @patch("agents.looker_agent_client.geminidataanalytics.DataAgentServiceClient")
+    def test_chat_thinking_mode(self, mock_agent_svc, mock_chat_svc):
+        """Verify chat() maps FAST and THINKING modes to ChatRequest.ThinkingMode enum and rejects invalid modes."""
+        mock_chat_client = mock_chat_svc.return_value
+        mock_chat_client.chat.return_value = []
+
+        client = LookerAgentClient(project_id="test-proj", looker_access_token="tok")
+
+        for mode_str, expected_enum in [
+            ("FAST", geminidataanalytics.ChatRequest.ThinkingMode.FAST),
+            ("thinking", geminidataanalytics.ChatRequest.ThinkingMode.THINKING),
+        ]:
+            client.chat(
+                question="What is total revenue?",
+                skip_agent_use=True,
+                looker_instance_uri="https://looker.example.com",
+                explores=[("ecomm", "sales")],
+                thinking_mode=mode_str,
+            )
+            chat_req = mock_chat_client.chat.call_args.kwargs["request"]
+            self.assertEqual(chat_req.thinking_mode, expected_enum)
+
+        with self.assertRaises(ValueError):
+            client.chat(
+                question="What is total revenue?",
+                skip_agent_use=True,
+                looker_instance_uri="https://looker.example.com",
+                explores=[("ecomm", "sales")],
+                thinking_mode="INVALID_MODE",
+            )
 
 
 if __name__ == "__main__":

@@ -60,5 +60,23 @@ class TestChartMetric(unittest.TestCase):
         self.assertEqual(score2, 0.0)
         self.assertEqual(score3, 0.0)
 
+    def test_string_mark_and_label_fields(self):
+        """Test Vega-Lite spec where 'mark' is a string and axis fields use display labels."""
+        generated_chart = {
+            'mark': 'bar',
+            'encoding': {
+                'x': {'title': 'Calendar Month', 'field': 'Calendar Month'},
+                'y': {'title': 'Total Sales', 'field': 'Total Sales'},
+            },
+        }
+        expected_chart = {
+            'type': 'line',
+            'x-axis': 'sales.calendar_month',
+            'y-axis': 'sales.total_sales',
+        }
+        score = self.metric.evaluate(generated_chart, expected_chart)
+        self.assertAlmostEqual(score, 2 / 3)
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -320,6 +320,93 @@ class TestLookerAgentClient(unittest.TestCase):
                 thinking_mode="INVALID_MODE",
             )
 
+    @patch("agents.looker_agent_client.requests.post")
+    @patch("agents.looker_agent_client.geminidataanalytics.DataChatServiceClient")
+    @patch("agents.looker_agent_client.geminidataanalytics.DataAgentServiceClient")
+    def test_chat_unwraps_proto_data_rows_and_fetches_looker_sql(
+        self, mock_agent_svc, mock_chat_svc, mock_post
+    ):
+        """Verify chat() unwraps MapComposite data rows (including None) and compiles LookerQuery to SQL."""
+        mock_sql_resp = MagicMock()
+        mock_sql_resp.text = "SELECT sales.category, SUM(sales.revenue) FROM ecomm.sales GROUP BY 1"
+        mock_post.return_value = mock_sql_resp
+
+        data_result = geminidataanalytics.DataResult(
+            schema=geminidataanalytics.Schema(
+                fields=[
+                    geminidataanalytics.Field(name="sales.category"),
+                    geminidataanalytics.Field(name="sales.total_sales"),
+                ]
+            ),
+        )
+        data_result.data.extend(
+            [
+                {"sales.category": "Apparel", "sales.total_sales": 1250.5},
+                {"sales.category": None, "sales.total_sales": 300.0},
+            ]
+        )
+
+        mock_chat_client = mock_chat_svc.return_value
+        mock_chat_client.chat.return_value = [
+            geminidataanalytics.Message(
+                system_message=geminidataanalytics.SystemMessage(
+                    data=geminidataanalytics.DataMessage(
+                        query=geminidataanalytics.DataQuery(
+                            looker=geminidataanalytics.LookerQuery(
+                                model="ecomm",
+                                explore="sales",
+                                fields=["sales.category", "sales.total_sales"],
+                                filters=[
+                                    geminidataanalytics.LookerQuery.Filter(
+                                        field="sales.calendar_year",
+                                        value="2024",
+                                    )
+                                ],
+                                limit="10",
+                            )
+                        ),
+                    )
+                )
+            ),
+            geminidataanalytics.Message(
+                system_message=geminidataanalytics.SystemMessage(
+                    data=geminidataanalytics.DataMessage(
+                        result=data_result,
+                    )
+                )
+            ),
+        ]
+
+        client = LookerAgentClient(project_id="test-proj", looker_access_token="tok-123")
+        generated_sql, generated_df, generated_lq, _, _, _, _ = client.chat(
+            question="Sales by category in 2024?",
+            skip_agent_use=True,
+            looker_instance_uri="https://looker.example.com/",
+            explores=[("ecomm", "sales")],
+        )
+
+        self.assertEqual(
+            generated_sql,
+            "SELECT sales.category, SUM(sales.revenue) FROM ecomm.sales GROUP BY 1",
+        )
+        self.assertIsNotNone(generated_df)
+        self.assertEqual(len(generated_df), 2)
+        self.assertEqual(generated_df.iloc[0]["sales.category"], "Apparel")
+        self.assertIsNone(generated_df.iloc[1]["sales.category"])
+        self.assertEqual(generated_lq.model, "ecomm")
+        mock_post.assert_called_once_with(
+            "https://looker.example.com/api/4.0/queries/run/sql",
+            headers={"Authorization": "token tok-123"},
+            json={
+                "model": "ecomm",
+                "view": "sales",
+                "fields": ["sales.category", "sales.total_sales"],
+                "filters": {"sales.calendar_year": "2024"},
+                "limit": "10",
+            },
+            timeout=30,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

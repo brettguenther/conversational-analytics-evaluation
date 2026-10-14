@@ -379,6 +379,7 @@ def looker(
             "agent_response": {
                 "response_text": generated_text,
                 "generated_query": serialized_looker_query,
+                "generated_sql": generated_sql,
                 "data_result": (
                     generated_df.to_dict(orient="records")
                     if generated_df is not None

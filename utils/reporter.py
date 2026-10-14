@@ -1,3 +1,4 @@
+import datetime
 import json
 import os
 import altair as alt
@@ -5,11 +6,15 @@ import altair as alt
 def generate_markdown_report(evaluation_results, filename="evaluation_report.md"):
     """Generates a Markdown report from the evaluation results."""
     
-    # Create a directory for images if it doesn't exist
-    if not os.path.exists("images"):
-        os.makedirs("images")
+    # Create a directory for images and reports if they doesn't exist
 
-    with open(filename, "w") as f:
+    if not os.path.exists("reports"):
+        os.makedirs("reports")
+    
+    if not os.path.exists("reports/images"):
+        os.makedirs("reports/images")
+
+    with open(f"reports/{filename}", "w") as f:
         summary = evaluation_results.get("evaluation_summary", {})
         f.write("# Evaluation Report\n\n")
         f.write("## Summary\n\n")
@@ -101,8 +106,9 @@ def generate_markdown_report(evaluation_results, filename="evaluation_report.md"
             if generated_chart:
                 try:
                     chart = alt.Chart.from_json(json.dumps(generated_chart))
-                    chart_path = f"images/chart_{question_details.get('id', i+1)}.png"
-                    chart.save(chart_path,'png')
+                    timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+                    chart_path = f"images/chart_{question_details.get('id', i+1)}_{timestamp}.png"
+                    chart.save(f"reports/{chart_path}", "png")
                     f.write("**Generated Chart:**\n\n")
                     f.write(f"![Generated Chart]({chart_path})\n\n")
                 except Exception as e:

@@ -6,36 +6,39 @@ This framework is designed to evaluate the response quality of Conversational An
 
 1.  **Install dependencies:**
 
-  This project uses `uv` for package management. To install the required dependencies, run:
-  ```bash
-  uv sync
-  ```
+This project uses `uv` for package management. To install the required dependencies, run:
+
+```bash
+uv sync
+```
 
 2.  **Configure Looker API Credentials:**
 
-  Create a `.env` file in the root of the project with your Looker API client ID and secret:
-  ```bash
-  touch .env
-  echo "LOOKER_CLIENT_ID={myClientId}" >> .env
-  echo "LOOKER_CLIENT_SECRET={mySecret}" >> .env
-  ```
+Create a `.env` file in the root of the project with your Looker API client ID and secret (or an OAuth access token):
 
-  Alternatively, a Looker access token can be passed into the cli. Ensure the Looker service account or user associated with the API credentials has the correct permissions to create nad use agents as well as access the Looker models.
+```bash
+touch .env
+echo "LOOKER_CLIENT_ID={myClientId}" >> .env
+echo "LOOKER_CLIENT_SECRET={mySecret}" >> .env
+# Optional: LOOKER_ACCESS_TOKEN={myAccessToken}
+```
+
+Alternatively, a Looker access token can be passed into the CLI via `--looker-access-token` (which takes precedence over `LOOKER_CLIENT_ID`/`LOOKER_CLIENT_SECRET`). When `--looker-dev-mode` is enabled without an explicit `--looker-access-token`, the client automatically exchanges `LOOKER_CLIENT_ID` and `LOOKER_CLIENT_SECRET` against `{looker_instance}/api/4.0/login` for a `TokenBased` OAuth access token. Ensure the Looker user associated with the credentials has the appropriate permissions (`develop` for Development Mode) to access the Looker models.
 
 3. **Enable the required Google Cloud APIs:**
 
-  Enable the required APIs on the project you will use to authenticate your Gemini Data Analytics API requests: `geminidataanalytics.googleapis.com`,`cloudaicompanion.googleapis.com`,`bigquery.googleapis.com`.
+Enable the required APIs on the project you will use to authenticate your Gemini Data Analytics API requests: `geminidataanalytics.googleapis.com`,`cloudaicompanion.googleapis.com`,`bigquery.googleapis.com`.
 
-  If using LLM based evaluations, enable the Vertex AI API (`aiplatform.googleapis.com`).
+If using LLM based evaluations, enable the Vertex AI API (`aiplatform.googleapis.com`).
 
 4. **Provide a GCP Auth Token:**
-  `gcloud auth application-default login`
+   `gcloud auth application-default login`
 
-  If using LLM based evaluations, ensure the user or service account has the required roles to use Vertex AI (`roles/aiplatform.user`).
+If using LLM based evaluations, ensure the user or service account has the required roles to use Vertex AI (`roles/aiplatform.user`).
 
 ## Running the Evaluation
 
-  The main entry point for running evaluations is the `cli/cli.py` script, which is exposed as the `ca-eval` command. An evaluation run will generate a json representation of the results in the `results` folder with the filenaming convention of `evaluation_results_{date}-{time}.json`.
+The main entry point for running evaluations is the `cli/cli.py` script, which is exposed as the `ca-eval` command. An evaluation run will generate a json representation of the results in the `results` folder with the filenaming convention of `evaluation_results_{date}-{time}.json`.
 
 ### Example Command
 
@@ -52,18 +55,22 @@ uv run ca-eval looker \
 
 ### Command-line Options
 
--   `--project-id`: Your Google Cloud project ID.
--   `--location`: The GCP location for the agent (e.g., `us-central1`). Defaults to `global`.
--   `--looker-instance`: The URL of your Looker instance.
--   `--model-explore`: The LookML model and explore to use, in the format `model_name/explore_name`. This option can be specified multiple times to include several explores or separated via comma's. The Looker agent can accept up to 5 model / explore pairs.
--   `--questions-file`: Path to the JSON file containing evaluation questions.
--   `--system-instructions-file`: (Optional) Path to a file containing system instructions for the agent.
--   `--agent-id`: (Optional) The ID of the data agent to use. If not provided, a new agent with a unique ID will be created for the run.
--   `--conversation-id`: (Optional) The ID of the conversation to use. If not provided, a new conversation with a unique ID will be created for the run.
--   `--skip-agent-use`: (Optional) A boolean flag that, when present, skips the agent creation and uses the inline context API for a stateless evaluation.
--   `--generate-report`: (Optional) A boolean flag that, when present, generates a Markdown report of the evaluation results named `evaluation_report.md`.
--   `--log-level`: (Optional) Set the logging level (e.g., `DEBUG`, `INFO`, `WARNING`). Defaults to `INFO`.
--   `--llm-eval`: (Optional) A boolean flag that, when present, enables LLM-based evaluation through the Vertex AI Evaluation Service.
+- `--project-id`: Your Google Cloud project ID.
+- `--location`: The GCP location for the agent (e.g., `us-central1`). Defaults to `global`.
+- `--looker-instance`: The URL of your Looker instance.
+- `--model-explore`: The LookML model and explore to use, in the format `model_name/explore_name`. This option can be specified multiple times to include several explores or separated via comma's. The Looker agent can accept up to 5 model / explore pairs.
+- `--questions-file`: Path to the JSON file containing evaluation questions.
+- `--agent-file`: (Optional) Path to a JSON file containing a full `DataAgent` or `Context` definition (`system_instruction`, `datasource_references`, `looker_golden_queries`, `glossary_terms`, `options`). Explicit CLI flags override corresponding fields in `--agent-file`.
+- `--system-instructions-file`: (Optional) Path to a file containing free-form system instructions for the agent (passed verbatim as `context.system_instruction`).
+- `--golden-queries-file`: (Optional) Path to a JSON file containing Looker golden queries (`looker_golden_queries`) to attach to the agent/inline `Context`.
+- `--looker-access-token`: (Optional) Looker OAuth access token (takes precedence over `.env` `LOOKER_CLIENT_ID` / `LOOKER_CLIENT_SECRET`).
+- `--looker-dev-mode`: (Optional) A boolean flag that enables Looker Development Mode (`LookerSettings.enable_dev_mode = true`) on chat requests.
+- `--agent-id`: (Optional) The ID of the data agent to use. If not provided, a new agent with a unique ID will be created for the run. If the agent ID already exists, its `published_context` will be updated via `UpdateDataAgent`.
+- `--conversation-id`: (Optional) The ID of the conversation to use. If not provided, a new conversation with a unique ID will be created for the run.
+- `--skip-agent-use`: (Optional) A boolean flag that, when present, skips the agent creation and uses the inline context API for a stateless evaluation.
+- `--generate-report`: (Optional) A boolean flag that, when present, generates a Markdown report of the evaluation results named `evaluation_report_{timestamp}.md`.
+- `--log-level`: (Optional) Set the logging level (e.g., `DEBUG`, `INFO`, `WARNING`). Defaults to `INFO`.
+- `--llm-eval`: (Optional) A boolean flag that, when present, enables LLM-based evaluation through the Vertex AI Evaluation Service.
 
 ## Evaluation Questions
 
@@ -74,12 +81,12 @@ Evaluation questions are defined in JSON files in the `data/questions/` director
   "id": "S-4",
   "category": "Simple",
   "question": "What were sales in December 2024?",
-  "expected_result_text": "",
+  "expected_result_text": "Total sales in December of 2024 were $1,705,001.23",
   "expected_result": [
-      {
-        "sales.calendar_month": "2024-12",
-        "sales.total_sales": 5705001.23
-      }
+    {
+      "sales.calendar_month": "2024-12",
+      "sales.total_sales": 1705001.23
+    }
   ],
   "expected_data_visualization": {
     "type": "line",
@@ -97,13 +104,13 @@ Evaluation questions are defined in JSON files in the `data/questions/` director
 }
 ```
 
--   `id`: A unique identifier for the question.
--   `category`: The category of the question (e.g., "Simple", "Medium", "Hard").
--   `question`: The natural language question to ask the agent.
--   `expected_result_text`: A string representation of the expected result.
--   `expected_result`: A structured representation of the expected result, used to create a pandas DataFrame for comparison.
--   `expected_data_visualization`: (Optional) A description of the expected chart visualization. This is used for the `ChartCorrectness` metric.
--   `reference_query`: The Looker query that represents the "golden" answer. Used for the `semantic_correctness` metric.
+- `id`: A unique identifier for the question.
+- `category`: The category of the question (e.g., "Simple", "Medium", "Hard").
+- `question`: The natural language question to ask the agent.
+- `expected_result_text`: A string representation of the expected result.
+- `expected_result`: A structured representation of the expected result, used to create a pandas DataFrame for comparison.
+- `expected_data_visualization`: (Optional) A description of the expected chart visualization. This is used for the `ChartCorrectness` metric.
+- `reference_query`: The Looker query that represents the "golden" answer. Used for the `semantic_correctness` metric.
 
 ## Methodology
 
@@ -119,19 +126,19 @@ The final score for each question is a weighted average of the following metrics
 
 This deterministic metric compares the agent's generated Looker query to the `reference_query` provided in the question's data. The comparison is broken down into the following components, each with its own weight:
 
-*   **Model and Explore (20%)**: Checks for an exact match of the Looker model and explore.
-*   **Fields (40%)**: Compares the set of fields in the generated query with the reference query. Partial credit is awarded based on the Jaccard similarity between the two sets of fields.
-*   **Filters (40%)**: Compares the filters applied in the queries. The scoring here is nuanced:
-    *   **Filter Keys**: It checks for matches between the filter fields. Partial credit (50%) is given for using a field with the same base name but a different view (e.g., `users.age` vs. `customers.age`).
-    *   **Filter Values**: For filters with matching keys, it compares the filter values.
-    *   Wildcards (`%`) are ignored in value comparisons.
+- **Model and Explore (20%)**: Checks for an exact match of the Looker model and explore.
+- **Fields (40%)**: Compares the set of fields in the generated query with the reference query. Partial credit is awarded based on the Jaccard similarity between the two sets of fields.
+- **Filters (40%)**: Compares the filters applied in the queries. The scoring here is nuanced:
+  - **Filter Keys**: It checks for matches between the filter fields. Partial credit (50%) is given for using a field with the same base name but a different view (e.g., `users.age` vs. `customers.age`).
+  - **Filter Values**: For filters with matching keys, it compares the filter values.
+  - Wildcards (`%`) are ignored in value comparisons.
 
 ### DataFrame Correctness (`DataFrameMatch`)
 
 This deterministic metric evaluates the similarity between the dataframe produced by the agent's query and the `expected_result` dataframe.
 
-*   **Column Similarity (30%)**: It calculates the Jaccard similarity between the column names of the two dataframes.
-*   **Data Similarity (70%)**: For the common dimensions, it performs a comparison of the data using the `datacompy` library to handle row ordering differences joining the dataframes on common Looker dimensions when present. This also allows for tolerance in data types and floating-point precision.
+- **Column Similarity (30%)**: It calculates the Jaccard similarity between the column names of the two dataframes.
+- **Data Similarity (70%)**: For the common dimensions, it performs a comparison of the data using the `datacompy` library to handle row ordering differences joining the dataframes on common Looker dimensions when present. This also allows for tolerance in data types and floating-point precision.
 
 The final `DataFrameMatch` score is a weighted average of the column and data similarity scores.
 
@@ -143,9 +150,9 @@ For questions categorized as "Simple", an additional `TextSimilarity` determinis
 
 This set of metrics leverages a large language model to evaluate the quality of the agent's response in up to three key areas:
 
-*   **Intent Resolution**: This metric assesses whether the agent's response directly and accurately addresses the user's question or instruction. It uses a pointwise rating system where the LLM determines if the response fully matches, partially matches, or does not match the user's intent.
-*   **Completeness**: This metric evaluates if the agent's response provides all the necessary information to be considered a complete answer, without leaving out important details. The LLM rates the response as fully complete, partially complete, or incomplete.
-*   **Chart Appropriateness**: This metric evaluates if the agent's selected output visualization is a good fit for the data structure and input question.
+- **Intent Resolution**: This metric assesses whether the agent's response directly and accurately addresses the user's question or instruction. It uses a pointwise rating system where the LLM determines if the response fully matches, partially matches, or does not match the user's intent.
+- **Completeness**: This metric evaluates if the agent's response provides all the necessary information to be considered a complete answer, without leaving out important details. The LLM rates the response as fully complete, partially complete, or incomplete.
+- **Chart Appropriateness**: This metric evaluates if the agent's selected output visualization is a good fit for the data structure and input question.
 
 These metrics are particularly useful for understanding the nuances of the agent's conversational abilities beyond simple data correctness. Note, the framework does not currently evaluate the reasoning steps the agent takes (commonly referred to as an auto-eval judge).
 
@@ -153,8 +160,8 @@ These metrics are particularly useful for understanding the nuances of the agent
 
 This metric is a deterministic check that evaluates the correctness of charts generated by the agent. When a question expects a chart as part of the answer, this metric compares the generated chart's specification against a reference chart. The comparison is based on three key aspects:
 
-*   **Mark Type**: Checks if the chart type (e.g., `bar`, `line`) matches the expected type.
-*   **X-axis Field**: Verifies that the correct data field is used for the x-axis.
-*   **Y-axis Field**: Verifies that the correct data field is used for the y-axis.
+- **Mark Type**: Checks if the chart type (e.g., `bar`, `line`) matches the expected type.
+- **X-axis Field**: Verifies that the correct data field is used for the x-axis.
+- **Y-axis Field**: Verifies that the correct data field is used for the y-axis.
 
 The final score is the average of these three checks, providing a quantitative measure of the chart's structural accuracy.

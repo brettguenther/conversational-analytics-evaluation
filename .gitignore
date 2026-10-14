@@ -8,8 +8,18 @@ wheels/
 
 # Virtual environments
 .venv
+uv.lock
 
 .DS_Store
 
 .env
 config.json
+
+# Local Eval Artifacts
+results/
+reports/
+images/
+data/
+
+# Local Dev
+context/

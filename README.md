@@ -65,6 +65,7 @@ uv run ca-eval looker \
 - `--golden-queries-file`: (Optional) Path to a JSON file containing Looker golden queries (`looker_golden_queries`) to attach to the agent/inline `Context`.
 - `--looker-access-token`: (Optional) Looker OAuth access token (takes precedence over `.env` `LOOKER_CLIENT_ID` / `LOOKER_CLIENT_SECRET`).
 - `--looker-dev-mode`: (Optional) A boolean flag that enables Looker Development Mode (`LookerSettings.enable_dev_mode = true`) on chat requests.
+- `--thinking-mode`: (Optional) Thinking mode for the agent loop (`FAST` or `THINKING`). Defaults to `THINKING_MODE_UNSPECIFIED`.
 - `--agent-id`: (Optional) The ID of the data agent to use. If not provided, a new agent with a unique ID will be created for the run. If the agent ID already exists, its `published_context` will be updated via `UpdateDataAgent`.
 - `--conversation-id`: (Optional) The ID of the conversation to use. If not provided, a new conversation with a unique ID will be created for the run.
 - `--skip-agent-use`: (Optional) A boolean flag that, when present, skips the agent creation and uses the inline context API for a stateless evaluation.

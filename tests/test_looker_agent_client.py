@@ -288,6 +288,38 @@ class TestLookerAgentClient(unittest.TestCase):
 
         self.assertEqual(generated_text, "## Final Answer\n\nTotal revenue is $1,234.")
 
+    @patch("agents.looker_agent_client.geminidataanalytics.DataChatServiceClient")
+    @patch("agents.looker_agent_client.geminidataanalytics.DataAgentServiceClient")
+    def test_chat_thinking_mode(self, mock_agent_svc, mock_chat_svc):
+        """Verify chat() maps FAST and THINKING modes to ChatRequest.ThinkingMode enum and rejects invalid modes."""
+        mock_chat_client = mock_chat_svc.return_value
+        mock_chat_client.chat.return_value = []
+
+        client = LookerAgentClient(project_id="test-proj", looker_access_token="tok")
+
+        for mode_str, expected_enum in [
+            ("FAST", geminidataanalytics.ChatRequest.ThinkingMode.FAST),
+            ("thinking", geminidataanalytics.ChatRequest.ThinkingMode.THINKING),
+        ]:
+            client.chat(
+                question="What is total revenue?",
+                skip_agent_use=True,
+                looker_instance_uri="https://looker.example.com",
+                explores=[("wiq-labs", "sales")],
+                thinking_mode=mode_str,
+            )
+            chat_req = mock_chat_client.chat.call_args.kwargs["request"]
+            self.assertEqual(chat_req.thinking_mode, expected_enum)
+
+        with self.assertRaises(ValueError):
+            client.chat(
+                question="What is total revenue?",
+                skip_agent_use=True,
+                looker_instance_uri="https://looker.example.com",
+                explores=[("wiq-labs", "sales")],
+                thinking_mode="INVALID_MODE",
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

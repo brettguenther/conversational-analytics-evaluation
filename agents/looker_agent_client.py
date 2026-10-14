@@ -485,6 +485,8 @@ class LookerAgentClient:
             return self.data_chat_client.get_conversation(name=conversation_name)
 
     def _value_to_dict(self, v):
+        if v is None:
+            return None
         if isinstance(v, proto.marshal.collections.maps.MapComposite):
             return self._map_to_dict(v)
         if isinstance(v, proto.marshal.collections.RepeatedComposite):
@@ -502,8 +504,114 @@ class LookerAgentClient:
                 out[k] = self._value_to_dict(d[k])
         return out
 
-    # TODO - use Looker SDK to get model reference and vis config from qid
-    # TODO - use Looker SDK to get SQL for model reference or qid
+    def _get_looker_api_token(self, looker_instance_uri: str) -> str | None:
+        """Returns a Looker OAuth access token for direct Looker API calls without mutating GDA credentials."""
+        if self.looker_access_token:
+            return self.looker_access_token
+        if getattr(self, "_cached_looker_api_token", None):
+            return self._cached_looker_api_token
+        if not (self.looker_client_id and self.looker_client_secret and looker_instance_uri):
+            return None
+
+        login_url = f"{looker_instance_uri.rstrip('/')}/api/4.0/login"
+        try:
+            response = requests.post(
+                login_url,
+                data={
+                    "client_id": self.looker_client_id,
+                    "client_secret": self.looker_client_secret,
+                },
+                timeout=30,
+            )
+            response.raise_for_status()
+            token = response.json().get("access_token")
+            if token:
+                self._cached_looker_api_token = token
+                return token
+        except Exception as e:
+            logger.warning(
+                f"Failed to obtain Looker API token from {login_url}: {e}"
+            )
+        return None
+
+    def fetch_looker_sql(
+        self,
+        looker_query: dict | geminidataanalytics.LookerQuery,
+        looker_instance_uri: str = None,
+        explores: list[tuple[str, str]] = None,
+        agent_definition: dict = None,
+    ) -> str | None:
+        """Compiles a generated LookerQuery into SQL via the Looker 4.0 inline query API."""
+        if not looker_query:
+            return None
+
+        if isinstance(looker_query, geminidataanalytics.LookerQuery):
+            query_dict = geminidataanalytics.LookerQuery.to_dict(looker_query)
+        elif isinstance(looker_query, dict):
+            query_dict = dict(looker_query)
+        else:
+            return None
+
+        resolved_uri = looker_instance_uri
+        default_model = None
+        default_explore = None
+        if explores:
+            default_model, default_explore = explores[0]
+        elif isinstance(agent_definition, dict):
+            ctx = self._build_context(agent_definition=agent_definition)
+            exp_refs = ctx.datasource_references.looker.explore_references
+            if exp_refs:
+                resolved_uri = resolved_uri or exp_refs[0].looker_instance_uri
+                default_model = exp_refs[0].lookml_model
+                default_explore = exp_refs[0].explore
+
+        if not resolved_uri:
+            return None
+
+        token = self._get_looker_api_token(resolved_uri)
+        if not token:
+            return None
+
+        model = query_dict.get("model") or default_model
+        view = query_dict.get("explore") or query_dict.get("view") or default_explore
+        fields = list(query_dict.get("fields") or [])
+        if not (model and view and fields):
+            return None
+
+        raw_filters = query_dict.get("filters")
+        sdk_filters = {}
+        if isinstance(raw_filters, list):
+            for f in raw_filters:
+                if isinstance(f, dict) and "field" in f and "value" in f:
+                    sdk_filters[str(f["field"])] = str(f["value"])
+        elif isinstance(raw_filters, dict):
+            sdk_filters = {str(k): str(v) for k, v in raw_filters.items()}
+
+        write_query: dict = {
+            "model": model,
+            "view": view,
+            "fields": fields,
+        }
+        if sdk_filters:
+            write_query["filters"] = sdk_filters
+        if query_dict.get("sorts"):
+            write_query["sorts"] = list(query_dict["sorts"])
+        if query_dict.get("limit") is not None:
+            write_query["limit"] = str(query_dict["limit"])
+
+        sql_url = f"{resolved_uri.rstrip('/')}/api/4.0/queries/run/sql"
+        try:
+            response = requests.post(
+                sql_url,
+                headers={"Authorization": f"token {token}"},
+                json=write_query,
+                timeout=30,
+            )
+            response.raise_for_status()
+            return response.text
+        except Exception as e:
+            logger.warning(f"Failed to fetch SQL from Looker API: {e}")
+            return None
 
     def chat(
         self,
@@ -635,7 +743,19 @@ class LookerAgentClient:
                             field.name for field in data_message.result.schema.fields
                         ]
                     for el in data_message.result.data:
-                        row = {field: el[field] for field in fields}
+                        el_dict = self._value_to_dict(el)
+                        row = {
+                            field: (
+                                el_dict.get(field)
+                                if isinstance(el_dict, dict)
+                                else getattr(
+                                    el,
+                                    field,
+                                    el[field] if hasattr(el, "__getitem__") else None,
+                                )
+                            )
+                            for field in fields
+                        }
                         data_rows.append(row)
                 if text_message and text_message.parts:
                     logger.debug(response)
@@ -658,6 +778,14 @@ class LookerAgentClient:
 
         if data_rows:
             generated_df = pd.DataFrame(data_rows)
+
+        if not generated_sql and generated_looker_query:
+            generated_sql = self.fetch_looker_sql(
+                looker_query=generated_looker_query,
+                looker_instance_uri=looker_instance_uri,
+                explores=explores,
+                agent_definition=agent_definition,
+            )
 
         return (
             generated_sql,

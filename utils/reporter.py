@@ -102,6 +102,12 @@ def generate_markdown_report(evaluation_results, filename="evaluation_report.md"
             f.write(json.dumps(agent_response.get("generated_query", {}), indent=2))
             f.write("\n```\n\n")
 
+            if agent_response.get("generated_sql"):
+                f.write("**Generated SQL:**\n")
+                f.write("```sql\n")
+                f.write(f"{agent_response.get('generated_sql')}\n")
+                f.write("```\n\n")
+
             generated_chart = agent_response.get("generated_chart")
             if generated_chart:
                 try:
